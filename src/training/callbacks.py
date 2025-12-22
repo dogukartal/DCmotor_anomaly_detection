@@ -170,7 +170,7 @@ def create_callbacks(config: Dict[str, Any],
     checkpoint_config = training_config.get('checkpoints', {})
     if checkpoint_config.get('save_best', True):
         best_checkpoint = keras.callbacks.ModelCheckpoint(
-            filepath=str(Path(experiment_paths.checkpoints) / 'best_model'),
+            filepath=str(Path(experiment_paths.checkpoints) / 'best_model.keras'),
             monitor=checkpoint_config.get('monitor', 'val_loss'),
             save_best_only=True,
             verbose=1
@@ -179,7 +179,7 @@ def create_callbacks(config: Dict[str, Any],
 
     if checkpoint_config.get('save_last', True):
         last_checkpoint = keras.callbacks.ModelCheckpoint(
-            filepath=str(Path(experiment_paths.checkpoints) / 'last_model'),
+            filepath=str(Path(experiment_paths.checkpoints) / 'last_model.keras'),
             save_best_only=False,
             verbose=0
         )
