@@ -48,8 +48,7 @@ class ExperimentManager:
 
         # Create directory structure
         exp_root.mkdir(parents=True, exist_ok=True)
-        (exp_root / 'checkpoints' / 'best_model').mkdir(parents=True, exist_ok=True)
-        (exp_root / 'checkpoints' / 'last_model').mkdir(parents=True, exist_ok=True)
+        (exp_root / 'checkpoints').mkdir(parents=True, exist_ok=True)
         (exp_root / 'plots').mkdir(parents=True, exist_ok=True)
         (exp_root / 'logs').mkdir(parents=True, exist_ok=True)
 
