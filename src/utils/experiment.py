@@ -41,7 +41,7 @@ class ExperimentManager:
             ExperimentPaths object containing all paths
 
         Format: exp_{id}_{date}_{encoder_units}_{lr}_{batch}_{epochs}_{name}
-        Example: exp_001_20241215_64-32_lr0.001_b32_e100_friction_test
+        Example: exp_001_20241215_64-32_lr001_b32_e100_friction_test
         """
         exp_name = self.generate_experiment_name(self.config)
         exp_root = self.base_path / exp_name
@@ -72,7 +72,7 @@ class ExperimentManager:
         Generate experiment name from configuration.
 
         Format: exp_{id}_{date}_{encoder_units}_{lr}_{batch}_{epochs}_{name}
-        Example: exp_001_20241215_64-32_lr0.001_b32_e100_friction_test
+        Example: exp_001_20241215_64-32_lr001_b32_e100_friction_test
 
         Args:
             config: Experiment configuration
@@ -91,9 +91,10 @@ class ExperimentManager:
         encoder_units = config['model']['encoder_units']
         encoder_str = "-".join(map(str, encoder_units))
 
-        # Get learning rate
+        # Get learning rate (format without decimal point, e.g., 0.001 -> lr001)
         lr = config['training']['optimizer']['learning_rate']
-        lr_str = f"lr{lr}"
+        lr_formatted = str(lr).replace('.', '').replace('0', '', 1) if str(lr).startswith('0.') else str(lr).replace('.', '')
+        lr_str = f"lr{lr_formatted}"
 
         # Get batch size
         batch_size = config['training']['batch_size']
