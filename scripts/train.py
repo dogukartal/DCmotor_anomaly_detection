@@ -79,16 +79,17 @@ def main():
 
     # Setup physics loss
     physics_loss = None
+    normalizer = None
+    normalizer_path = Path(args.data).parent / 'normalizer_stats.json'
+
     if config.get('physics_loss', {}).get('enabled', True):
         print("Setting up physics-informed loss...")
         # Load normalizer
-        normalizer_path = Path(args.data).parent / 'normalizer_stats.json'
         if normalizer_path.exists():
             normalizer = Normalizer()
             normalizer.load_statistics(str(normalizer_path))
         else:
             print("Warning: Normalizer not found, physics loss will not denormalize")
-            normalizer = None
 
         target_rate = config['data_processing']['target_sampling_rate_hz']
         physics_loss = PhysicsInformedLoss.from_config(config, normalizer, sampling_rate=target_rate)
