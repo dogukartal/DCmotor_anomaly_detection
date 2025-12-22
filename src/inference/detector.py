@@ -169,7 +169,7 @@ class AnomalyDetector:
         experiment_dir = Path(experiment_dir)
 
         # Load model
-        checkpoint_path = experiment_dir / 'checkpoints' / checkpoint
+        checkpoint_path = experiment_dir / 'checkpoints' / f'{checkpoint}.keras'
         if not checkpoint_path.exists():
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
