@@ -10,6 +10,8 @@ configs/
 │   └── default.json
 ├── model/        # Model configurations
 │   └── default.json
+├── hpo/          # Hyperparameter optimization configurations
+│   └── hpo_config.json
 └── README.md     # This file
 ```
 
@@ -62,6 +64,99 @@ Model configs define:
     ...
   },
   "training": { ... }
+}
+```
+
+### HPO Configs (`configs/hpo/`)
+
+HPO (Hyperparameter Optimization) configs define:
+- **hyperparameter_optimization.enabled**: Enable/disable Optuna HPO
+- **hyperparameter_optimization.n_trials**: Number of trials to run
+- **hyperparameter_optimization.metric**: Metric to optimize (e.g., 'val_loss')
+- **hyperparameter_optimization.direction**: 'minimize' or 'maximize'
+- **hyperparameter_optimization.parameters**: Parameter search space with optional constraints
+
+**Parameter Types:**
+- `categorical`: Choose from discrete options
+- `int`: Integer values in a range
+- `uniform`: Continuous values in a range
+- `loguniform`: Log-scale continuous values
+
+**Parameter Constraints:**
+
+You can add constraints to ensure parameter dependencies are satisfied. For example, ensuring the bottleneck size doesn't exceed the last encoder layer:
+
+```json
+{
+  "model.encoder_units": {
+    "type": "categorical",
+    "choices": [[32], [64], [64, 32], [128, 64]]
+  },
+  "model.bottleneck.units": {
+    "type": "int",
+    "low": 8,
+    "high": 64,
+    "step": 8,
+    "constraint": {
+      "type": "max_from_last",
+      "parameter": "model.encoder_units",
+      "multiplier": 1.0
+    }
+  }
+}
+```
+
+**Constraint Types:**
+- `max_from_last`: Ensures the parameter value doesn't exceed the last element of another parameter (useful for list parameters like encoder_units). The `multiplier` allows scaling (e.g., 0.5 for half the size).
+
+**Important:** When using constraints, the dependent parameter (e.g., `model.encoder_units`) must appear **before** the constrained parameter (e.g., `model.bottleneck.units`) in the parameters dictionary.
+
+**Example HPO Config:**
+```json
+{
+  "experiment_id": "hpo",
+  "base_configs": {
+    "simulation": "configs/simulation/default.json",
+    "model": "configs/model/default.json"
+  },
+  "hyperparameter_optimization": {
+    "enabled": true,
+    "n_trials": 50,
+    "metric": "val_loss",
+    "direction": "minimize",
+    "parameters": {
+      "model.encoder_units": {
+        "type": "categorical",
+        "choices": [[32], [64], [64, 32], [128, 64]]
+      },
+      "model.bottleneck.units": {
+        "type": "int",
+        "low": 8,
+        "high": 64,
+        "step": 8,
+        "constraint": {
+          "type": "max_from_last",
+          "parameter": "model.encoder_units"
+        }
+      },
+      "training.epochs": {
+        "type": "int",
+        "low": 30,
+        "high": 150,
+        "step": 10
+      },
+      "training.lr_scheduler.patience": {
+        "type": "int",
+        "low": 3,
+        "high": 15
+      },
+      "training.optimizer.learning_rate": {
+        "type": "loguniform",
+        "low": 1e-5,
+        "high": 1e-2
+      }
+    }
+  }
 }
 ```
 
@@ -135,6 +230,27 @@ python scripts/train.py --model-config default --sim-id default
 # Explicit data path
 python scripts/train.py --model-config default --data data/processed/default/processed_data.npz
 ```
+
+### Running Hyperparameter Optimization
+
+```bash
+# Run HPO with default config
+python scripts/optimize.py
+
+# Run HPO with custom config
+python scripts/optimize.py --config configs/hpo/hpo_config.json
+
+# Run HPO with specific simulation data
+python scripts/optimize.py --sim-id default
+
+# Specify number of trials (overrides config)
+python scripts/optimize.py --n-trials 100
+```
+
+HPO results are saved to `experiments/hpo/` including:
+- `best_config.json`: Best configuration found
+- `study_summary.json`: Optimization summary and statistics
+- Trial checkpoints and logs
 
 ## Creating Custom Configs
 

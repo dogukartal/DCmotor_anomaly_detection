@@ -21,7 +21,18 @@
         "type": "int",
         "low": 8,
         "high": 64,
-        "step": 8
+        "step": 8,
+        "constraint": {
+          "type": "max_from_last",
+          "parameter": "model.encoder_units",
+          "multiplier": 1.0
+        }
+      },
+      "training.epochs": {
+        "type": "int",
+        "low": 30,
+        "high": 150,
+        "step": 10
       },
       "training.optimizer.learning_rate": {
         "type": "loguniform",
@@ -31,6 +42,12 @@
       "training.batch_size": {
         "type": "categorical",
         "choices": [16, 32, 64, 128]
+      },
+      "training.lr_scheduler.patience": {
+        "type": "int",
+        "low": 3,
+        "high": 15,
+        "step": 1
       },
       "physics_loss.weight": {
         "type": "uniform",

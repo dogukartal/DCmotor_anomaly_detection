@@ -109,9 +109,6 @@ class HyperparameterOptimizer:
             physics_loss=physics_loss
         )
 
-        # Reduce epochs for HPO
-        trial_config['training']['epochs'] = min(trial_config['training']['epochs'], 50)
-
         history = trainer.train(train_ds, val_ds)
 
         # Get metric value
@@ -123,6 +120,8 @@ class HyperparameterOptimizer:
         """
         Create configuration for trial by sampling from parameter space.
 
+        Handles parameter constraints and dependencies between parameters.
+
         Args:
             trial: Optuna trial
 
@@ -131,10 +130,18 @@ class HyperparameterOptimizer:
         """
         trial_config = self.base_config.copy()
 
+        # Track sampled values for constraint checking
+        sampled_values = {}
+
         for param_path, param_def in self.param_space.items():
             param_type = param_def['type']
 
-            if param_type == 'categorical':
+            # Handle parameter constraints
+            if 'constraint' in param_def:
+                value = self._sample_with_constraint(
+                    trial, param_path, param_def, sampled_values
+                )
+            elif param_type == 'categorical':
                 value = trial.suggest_categorical(param_path, param_def['choices'])
             elif param_type == 'int':
                 value = trial.suggest_int(
@@ -158,10 +165,82 @@ class HyperparameterOptimizer:
             else:
                 raise ValueError(f"Unknown parameter type: {param_type}")
 
+            # Store sampled value for constraint checking
+            sampled_values[param_path] = value
+
             # Set value in config using dot notation
             ConfigManager.set_nested(trial_config, param_path, value)
 
         return trial_config
+
+    def _sample_with_constraint(
+        self,
+        trial: Trial,
+        param_path: str,
+        param_def: Dict[str, Any],
+        sampled_values: Dict[str, Any]
+    ) -> Any:
+        """
+        Sample parameter value with constraint checking.
+
+        Args:
+            trial: Optuna trial
+            param_path: Parameter path (e.g., 'model.bottleneck.units')
+            param_def: Parameter definition with constraint
+            sampled_values: Previously sampled parameter values
+
+        Returns:
+            Sampled parameter value
+        """
+        constraint = param_def['constraint']
+        param_type = param_def['type']
+
+        # Handle max_from_last constraint (e.g., bottleneck <= last encoder layer)
+        if constraint['type'] == 'max_from_last':
+            dependent_param = constraint['parameter']
+
+            if dependent_param not in sampled_values:
+                raise ValueError(
+                    f"Constraint depends on '{dependent_param}' but it hasn't been sampled yet. "
+                    f"Ensure '{dependent_param}' appears before '{param_path}' in parameter space."
+                )
+
+            dependent_value = sampled_values[dependent_param]
+
+            # Get the last value from the list (for encoder_units, this is the last layer)
+            if isinstance(dependent_value, list):
+                max_value = dependent_value[-1]
+            else:
+                max_value = dependent_value
+
+            # Apply multiplier if specified
+            multiplier = constraint.get('multiplier', 1.0)
+            max_value = int(max_value * multiplier)
+
+            # Sample with constrained upper bound
+            if param_type == 'int':
+                # Ensure the upper bound doesn't exceed original high limit
+                original_high = param_def['high']
+                constrained_high = min(max_value, original_high)
+
+                # Ensure low <= high
+                if param_def['low'] > constrained_high:
+                    # If constraint makes range invalid, use minimum valid value
+                    value = param_def['low']
+                else:
+                    value = trial.suggest_int(
+                        param_path,
+                        param_def['low'],
+                        constrained_high,
+                        step=param_def.get('step', 1)
+                    )
+            else:
+                raise ValueError(f"Constraint type 'max_from_last' only supports 'int' parameters")
+
+        else:
+            raise ValueError(f"Unknown constraint type: {constraint['type']}")
+
+        return value
 
     def optimize(self, train_ds: tf.data.Dataset, val_ds: tf.data.Dataset) -> optuna.Study:
         """
