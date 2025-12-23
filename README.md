@@ -111,30 +111,6 @@ python scripts/infer.py \
 
 This outputs anomaly scores and detection results.
 
-## Architecture
-
-This project follows a **microservices-style architecture** where each component has:
-- **Clear input/output contracts**: Each script expects standardized inputs
-- **Minimal dependencies**: Services are loosely coupled
-- **Single responsibility**: Each component does one thing well
-
-```
-┌─────────────────┐      ┌──────────────────┐      ┌─────────────┐
-│   simulate.py   │ ───> │   process.py     │ ───> │  train.py   │
-│  (Raw Data)     │      │ (Processed Data) │      │  (Model)    │
-└─────────────────┘      └──────────────────┘      └─────────────┘
-                                  │
-                                  ↓
-                         ┌─────────────────┐
-                         │  optimize.py    │
-                         │ (HPO on Model)  │
-                         └─────────────────┘
-```
-
-**Key Principle**: Each service should not optimize parameters that are "baked into" its inputs. For example:
-- HPO operates on **pre-processed data** with a fixed `window_size`
-- If you want to optimize `window_size`, run a separate data processing HPO **before** model HPO
-
 ## Workflows
 
 ### Workflow A: Complete First-Time Pipeline
@@ -217,13 +193,6 @@ The `configs/hpo/hpo_config.json` follows a modular design:
 
 **NOT Optimizable in HPO:**
 - **Data processing parameters** (window_size, stride, etc.) - these are "baked into" the processed data
-- **Simulation parameters** - these are used to generate the training data
-
-**Why this design?**
-HPO operates on pre-processed data to avoid circular dependencies:
-- If HPO tried to optimize `window_size`, it would need to re-process data for each trial
-- This would be extremely slow and create tight coupling
-- Instead, run data processing once, then optimize model hyperparameters
 
 **To optimize window_size:** Run separate experiments with different window sizes, then compare results.
 
@@ -264,38 +233,6 @@ python scripts/train.py --model-config my_experiment
 ```
 
 ## Configuration
-
-The system uses **modular configuration files** with clear separation of concerns:
-
-### Configuration Architecture
-
-```
-┌──────────────────────────┐
-│  HPO Config (optional)   │
-│  configs/hpo/*.json      │
-│                          │
-│  References:             │
-│  ├─> simulation config   │
-│  └─> model config        │
-└──────────────────────────┘
-         │
-         │ (merged at runtime)
-         ↓
-┌──────────────────────────┐
-│   Simulation Config      │
-│  configs/simulation/     │──┐
-│  - Motor parameters      │  │
-│  - Input signals         │  │
-└──────────────────────────┘  │
-                              ├─> Used by scripts
-┌──────────────────────────┐  │
-│   Model Config           │  │
-│  configs/model/          │──┘
-│  - Data processing       │
-│  - Model architecture    │
-│  - Training params       │
-└──────────────────────────┘
-```
 
 **How Configs Interact:**
 - **Simulation config**: Used by `simulate.py` (standalone)
