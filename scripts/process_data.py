@@ -17,23 +17,52 @@ from src.visualization.plotter import Plotter
 
 def main():
     parser = argparse.ArgumentParser(description='Process raw simulation data')
-    parser.add_argument('--config', type=str, required=True, help='Path to configuration file')
-    parser.add_argument('--input', type=str, required=True, help='Path to raw simulation data (.npy)')
-    parser.add_argument('--output', type=str, help='Output directory (default: data/processed)')
+    parser.add_argument('--model-config', type=str, help='Model config ID or path (default: default)')
+    parser.add_argument('--sim-id', type=str, help='Simulation ID to process data from (default: from model config)')
+    parser.add_argument('--input', type=str, help='Path to raw simulation data (optional, auto-detected from sim-id)')
+    parser.add_argument('--output', type=str, help='Output directory (optional, default: data/processed/{simulation_id})')
     args = parser.parse_args()
 
-    # Load configuration
-    print(f"Loading configuration from {args.config}")
-    config = ConfigManager.load(args.config)
-    ConfigManager.validate(config)
+    # Load model configuration (contains data processing settings)
+    if args.model_config:
+        if args.model_config.endswith('.json'):
+            # Full path provided
+            print(f"Loading model configuration from {args.model_config}")
+            config = ConfigManager.load(args.model_config)
+            ConfigManager.validate(config, config_type='model')
+        else:
+            # ID provided
+            print(f"Loading model configuration: {args.model_config}")
+            config = ConfigManager.load_model_config(args.model_config)
+    else:
+        # Use default
+        print("Loading default model configuration")
+        config = ConfigManager.load_model_config('default')
 
-    # Setup output directory
-    output_dir = Path(args.output) if args.output else Path(config['paths']['processed_data'])
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Determine simulation ID
+    simulation_id = args.sim_id if args.sim_id else config.get('simulation_id', 'default')
+    print(f"Simulation ID: {simulation_id}")
+
+    # Setup directories
+    raw_data_dir = ConfigManager.get_simulation_data_path(simulation_id, 'raw')
+    output_dir = Path(args.output) if args.output else ConfigManager.get_simulation_data_path(simulation_id, 'processed')
+
+    # Determine input file
+    if args.input:
+        input_file = Path(args.input)
+    else:
+        # Auto-detect from simulation_id
+        input_file = raw_data_dir / 'simulation_result.npy'
+
+    if not input_file.exists():
+        raise FileNotFoundError(
+            f"Raw simulation data not found: {input_file}\n"
+            f"Please run simulate.py first with --sim-config {simulation_id}"
+        )
 
     # Load raw simulation data
-    print(f"Loading raw data from {args.input}")
-    raw_data = np.load(args.input, allow_pickle=True).item()
+    print(f"Loading raw data from {input_file}")
+    raw_data = np.load(input_file, allow_pickle=True).item()
 
     # Create processor
     print("Processing data...")
@@ -79,14 +108,16 @@ def main():
     fig = plotter.plot_features(
         data=processed_data.data[:sample_size],
         feature_names=processed_data.feature_names,
-        title="Processed Features (First 1000 Samples)"
+        title=f"Processed Features - {simulation_id} (First 1000 Samples)"
     )
     plotter.save_figure(fig, output_dir / 'processed_features')
 
     print("\nData processing completed successfully!")
+    print(f"Simulation ID: {simulation_id}")
     print(f"Total windows: {windows.shape[0]}")
     print(f"Window size: {windows.shape[1]}")
     print(f"Features per timestep: {windows.shape[2]}")
+    print(f"Output directory: {output_dir}")
 
 
 if __name__ == '__main__':
