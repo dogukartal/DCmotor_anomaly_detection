@@ -111,6 +111,30 @@ python scripts/infer.py \
 
 This outputs anomaly scores and detection results.
 
+## Architecture
+
+This project follows a **microservices-style architecture** where each component has:
+- **Clear input/output contracts**: Each script expects standardized inputs
+- **Minimal dependencies**: Services are loosely coupled
+- **Single responsibility**: Each component does one thing well
+
+```
+┌─────────────────┐      ┌──────────────────┐      ┌─────────────┐
+│   simulate.py   │ ───> │   process.py     │ ───> │  train.py   │
+│  (Raw Data)     │      │ (Processed Data) │      │  (Model)    │
+└─────────────────┘      └──────────────────┘      └─────────────┘
+                                  │
+                                  ↓
+                         ┌─────────────────┐
+                         │  optimize.py    │
+                         │ (HPO on Model)  │
+                         └─────────────────┘
+```
+
+**Key Principle**: Each service should not optimize parameters that are "baked into" its inputs. For example:
+- HPO operates on **pre-processed data** with a fixed `window_size`
+- If you want to optimize `window_size`, run a separate data processing HPO **before** model HPO
+
 ## Workflows
 
 ### Workflow A: Complete First-Time Pipeline
@@ -148,8 +172,10 @@ python scripts/infer.py \
 Find optimal hyperparameters using Optuna:
 
 ```bash
-# Step 1: Ensure you have processed data ready
+# Step 1: Ensure you have processed data ready with desired window_size
 # (Follow Workflow A steps 1-2 if not already done)
+# IMPORTANT: window_size must be set in configs/model/default.json BEFORE processing
+# HPO will optimize model parameters, NOT data processing parameters
 
 # Step 2: Run hyperparameter optimization
 python scripts/optimize.py \
@@ -173,17 +199,33 @@ python scripts/evaluate.py --experiment experiments/exp_002_<timestamp>_<params>
 
 **HPO Configuration Details:**
 
-The `configs/hpo/hpo_config.json` defines:
-- **n_trials**: Number of optimization trials (default: 50)
-- **metric**: Metric to optimize (e.g., "val_loss")
-- **direction**: "minimize" or "maximize"
-- **parameters**: Search space for each hyperparameter
+The `configs/hpo/hpo_config.json` follows a modular design:
+- **base_configs**: References to base simulation and model configs
+  - These configs are loaded and merged automatically
+  - HPO config inherits all settings from base configs
+- **hyperparameter_optimization**:
+  - **enabled**: Must be `true`
+  - **n_trials**: Number of optimization trials (default: 50)
+  - **metric**: Metric to optimize (e.g., "val_loss")
+  - **direction**: "minimize" or "maximize"
+  - **parameters**: Search space for each hyperparameter
 
-Optimizable parameters include:
-- Model architecture (encoder units, bottleneck size)
-- Training parameters (learning rate, batch size)
-- Data processing (window size)
-- Physics loss (weight, start epoch)
+**Optimizable Parameters (Model & Training Only):**
+- **Model architecture**: encoder units, bottleneck size, dropout
+- **Training parameters**: learning rate, batch size
+- **Physics loss**: weight, start epoch
+
+**NOT Optimizable in HPO:**
+- **Data processing parameters** (window_size, stride, etc.) - these are "baked into" the processed data
+- **Simulation parameters** - these are used to generate the training data
+
+**Why this design?**
+HPO operates on pre-processed data to avoid circular dependencies:
+- If HPO tried to optimize `window_size`, it would need to re-process data for each trial
+- This would be extremely slow and create tight coupling
+- Instead, run data processing once, then optimize model hyperparameters
+
+**To optimize window_size:** Run separate experiments with different window sizes, then compare results.
 
 ### Workflow C: Custom Experiment Configuration
 
@@ -223,43 +265,91 @@ python scripts/train.py --model-config my_experiment
 
 ## Configuration
 
-The system uses separate configuration files for different aspects:
+The system uses **modular configuration files** with clear separation of concerns:
+
+### Configuration Architecture
+
+```
+┌──────────────────────────┐
+│  HPO Config (optional)   │
+│  configs/hpo/*.json      │
+│                          │
+│  References:             │
+│  ├─> simulation config   │
+│  └─> model config        │
+└──────────────────────────┘
+         │
+         │ (merged at runtime)
+         ↓
+┌──────────────────────────┐
+│   Simulation Config      │
+│  configs/simulation/     │──┐
+│  - Motor parameters      │  │
+│  - Input signals         │  │
+└──────────────────────────┘  │
+                              ├─> Used by scripts
+┌──────────────────────────┐  │
+│   Model Config           │  │
+│  configs/model/          │──┘
+│  - Data processing       │
+│  - Model architecture    │
+│  - Training params       │
+└──────────────────────────┘
+```
+
+**How Configs Interact:**
+- **Simulation config**: Used by `simulate.py` (standalone)
+- **Model config**: Used by `process_data.py` and `train.py` (references simulation_id)
+- **HPO config**: Used by `optimize.py` (merges simulation + model configs, adds HPO parameters)
 
 ### Simulation Configuration (`configs/simulation/default.json`)
 
 Controls DC motor simulation parameters:
-- **experiment**: Experiment name and tracking
+- **simulation_id**: Unique identifier (must match across configs)
 - **input_generator**: Voltage signal generation (step, ramp, sinusoidal, chirp, noise)
 - **simulation**: DC motor parameters (resistance, inductance, torque constant, back-EMF constant, inertia, friction)
-- **solver**: ODE solver settings (method, tolerances)
+- **paths**: Data output directories
+
+**Used by:** `simulate.py`
 
 ### Model Configuration (`configs/model/default.json`)
 
 Controls data processing, model architecture, and training:
+- **simulation_id**: Must match the simulation config ID
 - **experiment**: Name, description, auto-increment ID
 - **data_processing**: Downsampling rate, derived features, windowing parameters, train/val/test split
 - **normalization**: Method (minmax, standard, robust) and feature range
 - **model**: LSTM architecture (encoder/decoder layers, bottleneck, dropout, activation functions)
-- **physics_loss**: Physics-informed loss weight and schedule
+- **physics_loss**: Physics-informed loss weight and schedule (uses motor params from simulation)
 - **training**: Optimizer, learning rate, batch size, epochs, callbacks (early stopping, LR scheduler)
 - **plotting**: Visualization settings
+
+**Used by:** `process_data.py`, `train.py`, `evaluate.py`
 
 ### HPO Configuration (`configs/hpo/hpo_config.json`)
 
 Controls hyperparameter optimization:
-- **base_configs**: References to simulation and model configs to use as base
-- **hyperparameter_optimization**: Optuna settings including:
+- **experiment_id**: Identifier for this HPO study
+- **base_configs**: References to simulation and model configs
+  - **simulation**: Path to base simulation config
+  - **model**: Path to base model config
+  - These are automatically loaded and merged at runtime
+- **hyperparameter_optimization**: Optuna settings
   - **enabled**: Must be `true` for HPO
   - **n_trials**: Number of optimization trials
   - **metric**: Metric to optimize (e.g., "val_loss")
   - **direction**: "minimize" or "maximize"
   - **parameters**: Search space definitions for each hyperparameter
 
-Each parameter can be:
+**Parameter Types:**
 - **categorical**: Discrete choices (e.g., `[32, 64, 128]`)
 - **int**: Integer range with step (e.g., `low: 8, high: 64, step: 8`)
 - **uniform**: Continuous range (e.g., `low: 0.01, high: 1.0`)
 - **loguniform**: Log-scale continuous range (e.g., `low: 1e-5, high: 1e-2`)
+
+**Used by:** `optimize.py` (automatically merges base configs)
+
+**Important:** HPO config only optimizes **model and training parameters**. Data processing parameters (like window_size) must be fixed before running HPO.
 
 ## Key Components
 

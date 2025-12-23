@@ -356,3 +356,55 @@ class ConfigManager:
         base_path = Path('data') / data_type / simulation_id
         base_path.mkdir(parents=True, exist_ok=True)
         return base_path
+
+    @staticmethod
+    def load_hpo_config(hpo_config_path: str) -> Dict[str, Any]:
+        """
+        Load HPO configuration and merge with base configs.
+
+        HPO configs reference base simulation and model configs which need to be loaded
+        and merged to create a complete configuration for optimization.
+
+        Args:
+            hpo_config_path: Path to HPO configuration file
+
+        Returns:
+            Merged configuration dictionary with HPO parameters
+
+        Raises:
+            FileNotFoundError: If HPO config or base configs don't exist
+            ValueError: If base_configs section is missing
+        """
+        # Load HPO config
+        hpo_config = ConfigManager.load(hpo_config_path)
+
+        # Check for base_configs section
+        if 'base_configs' not in hpo_config:
+            raise ValueError(
+                "HPO config must have 'base_configs' section with paths to "
+                "simulation and model configs"
+            )
+
+        base_configs = hpo_config['base_configs']
+        if 'simulation' not in base_configs or 'model' not in base_configs:
+            raise ValueError(
+                "base_configs must specify both 'simulation' and 'model' config paths"
+            )
+
+        # Load base configs
+        simulation_config = ConfigManager.load(base_configs['simulation'])
+        model_config = ConfigManager.load(base_configs['model'])
+
+        # Validate base configs
+        ConfigManager.validate(simulation_config, config_type='simulation')
+        ConfigManager.validate(model_config, config_type='model')
+
+        # Merge simulation and model configs
+        merged_config = ConfigManager.merge_configs(simulation_config, model_config)
+
+        # Add HPO-specific sections from HPO config
+        merged_config['experiment_id'] = hpo_config.get('experiment_id', 'hpo')
+        merged_config['description'] = hpo_config.get('description', '')
+        merged_config['hyperparameter_optimization'] = hpo_config['hyperparameter_optimization']
+
+        return merged_config
