@@ -21,7 +21,7 @@ dc_motor_anomaly/
 │   │   └── default.json             # DC motor simulation parameters
 │   ├── model/
 │   │   └── default.json             # Model, training, and data processing config
-│   └── experiments/
+│   └── hpo/
 │       └── hpo_config.json          # Hyperparameter optimization config
 │
 ├── src/
@@ -160,7 +160,7 @@ Find optimal hyperparameters using Optuna:
 
 # Step 2: Run hyperparameter optimization
 python scripts/optimize.py \
-  --config configs/experiments/hpo_config.json \
+  --config configs/hpo/hpo_config.json \
   --data data/processed/processed_data.npz
 # This runs multiple trials exploring the parameter space
 # Output: experiments/hpo_study/
@@ -181,7 +181,7 @@ python scripts/evaluate.py --experiment experiments/exp_002_<timestamp>_<params>
 
 **HPO Configuration Details:**
 
-The `configs/experiments/hpo_config.json` defines:
+The `configs/hpo/hpo_config.json` defines:
 - **n_trials**: Number of optimization trials (default: 50)
 - **metric**: Metric to optimize (e.g., "val_loss")
 - **direction**: "minimize" or "maximize"
@@ -199,24 +199,24 @@ Create custom configurations for specific experiments:
 
 ```bash
 # Step 1: Copy base configurations
-cp configs/simulation/default.json configs/experiments/my_simulation.json
-cp configs/model/default.json configs/experiments/my_model.json
+cp configs/simulation/default.json my_simulation.json
+cp configs/model/default.json my_model.json
 
 # Step 2: Edit configurations
 # Modify my_simulation.json for different motor parameters, load conditions, etc.
 # Modify my_model.json for different model architecture, training settings, etc.
 
 # Step 3: Run simulation with custom config
-python scripts/simulate.py --config configs/experiments/my_simulation.json
+python scripts/simulate.py --config my_simulation.json
 
 # Step 4: Process data with custom model config
 python scripts/process_data.py \
-  --config configs/experiments/my_model.json \
+  --config my_model.json \
   --input data/raw/simulation_result.npy
 
 # Step 5: Train with custom configuration
 python scripts/train.py \
-  --config configs/experiments/my_model.json \
+  --config my_model.json \
   --data data/processed/processed_data.npz
 
 # Step 6: Evaluate
@@ -246,7 +246,7 @@ Controls data processing, model architecture, and training:
 - **training**: Optimizer, learning rate, batch size, epochs, callbacks (early stopping, LR scheduler)
 - **plotting**: Visualization settings
 
-### HPO Configuration (`configs/experiments/hpo_config.json`)
+### HPO Configuration (`configs/hpo/hpo_config.json`)
 
 Controls hyperparameter optimization:
 - **base_configs**: References to simulation and model configs to use as base
