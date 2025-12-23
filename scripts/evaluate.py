@@ -6,11 +6,12 @@ import sys
 from pathlib import Path
 import numpy as np
 import json
+import tensorflow as tf
+from tensorflow import keras
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.inference.detector import AnomalyDetector
 from src.data.dataset import DatasetBuilder
 from src.visualization.plotter import Plotter
 from src.utils.config import ConfigManager
@@ -33,9 +34,14 @@ def main():
     config_path = exp_dir / 'config.json'
     config = ConfigManager.load(str(config_path))
 
-    # Load detector
-    print(f"Loading model from checkpoint: {args.checkpoint}")
-    detector = AnomalyDetector.from_experiment(str(exp_dir), checkpoint=args.checkpoint)
+    # Load model
+    checkpoint_path = exp_dir / 'checkpoints' / f'{args.checkpoint}.keras'
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+
+    print(f"Loading model from checkpoint: {checkpoint_path}")
+    model = keras.models.load_model(checkpoint_path)
+    print("Model loaded successfully")
 
     # Load data
     if args.data:
@@ -55,7 +61,7 @@ def main():
     train_ds, val_ds, test_ds = dataset_builder.build(windows, split_ratios=split_ratios)
 
     # Get test data as numpy array
-    print("Evaluating on test set...")
+    print("Extracting test set...")
     test_x = []
     test_y = []
     for x, y in test_ds:
@@ -66,64 +72,126 @@ def main():
 
     print(f"Test set size: {test_x.shape[0]} samples")
 
-    # Compute reconstruction errors on test set
-    test_errors = detector.compute_reconstruction_error(test_x)
+    # Evaluate model on test set
+    print("\nEvaluating model on test set...")
+    test_loss = model.evaluate(test_ds, verbose=1)
+    print(f"Test Loss: {test_loss:.6f}")
 
-    # Set threshold using percentile method
-    print("Computing threshold...")
-    threshold = detector.set_threshold(method='percentile', errors=test_errors, percentile=95)
+    # Generate predictions
+    print("\nGenerating predictions...")
+    predictions = model.predict(test_x, verbose=1)
 
-    # Detect anomalies
-    result = detector.detect(test_x)
+    # Compute reconstruction errors (MSE per sample)
+    print("\nComputing reconstruction errors...")
+    reconstruction_errors = np.mean(np.square(test_x - predictions), axis=(1, 2))
+
+    # Compute statistics
+    mean_error = float(np.mean(reconstruction_errors))
+    std_error = float(np.std(reconstruction_errors))
+    max_error = float(np.max(reconstruction_errors))
+    min_error = float(np.min(reconstruction_errors))
+    median_error = float(np.median(reconstruction_errors))
+
+    # Compute threshold using percentile method (95th percentile)
+    threshold_95 = float(np.percentile(reconstruction_errors, 95))
+    threshold_99 = float(np.percentile(reconstruction_errors, 99))
+
+    # Count anomalies at different thresholds
+    n_anomalies_95 = int(np.sum(reconstruction_errors > threshold_95))
+    n_anomalies_99 = int(np.sum(reconstruction_errors > threshold_99))
 
     print(f"\nEvaluation Results:")
-    print(f"  Threshold: {result.threshold:.6f}")
-    print(f"  Mean error: {result.metadata['mean_error']:.6f}")
-    print(f"  Max error: {result.metadata['max_error']:.6f}")
-    print(f"  Min error: {result.metadata['min_error']:.6f}")
-    print(f"  Anomalies detected: {result.metadata['n_anomalies']} / {result.metadata['n_samples']}")
-    print(f"  Anomaly rate: {result.metadata['anomaly_rate']*100:.2f}%")
+    print(f"  Test Loss: {test_loss:.6f}")
+    print(f"  Mean reconstruction error: {mean_error:.6f}")
+    print(f"  Std reconstruction error: {std_error:.6f}")
+    print(f"  Median reconstruction error: {median_error:.6f}")
+    print(f"  Max reconstruction error: {max_error:.6f}")
+    print(f"  Min reconstruction error: {min_error:.6f}")
+    print(f"\nThreshold Analysis:")
+    print(f"  95th percentile threshold: {threshold_95:.6f}")
+    print(f"    Anomalies detected: {n_anomalies_95} / {len(reconstruction_errors)} ({n_anomalies_95/len(reconstruction_errors)*100:.2f}%)")
+    print(f"  99th percentile threshold: {threshold_99:.6f}")
+    print(f"    Anomalies detected: {n_anomalies_99} / {len(reconstruction_errors)} ({n_anomalies_99/len(reconstruction_errors)*100:.2f}%)")
 
-    # Save results
+    # Save evaluation results
     results_dict = {
-        'threshold': float(result.threshold),
-        'mean_error': float(result.metadata['mean_error']),
-        'max_error': float(result.metadata['max_error']),
-        'min_error': float(result.metadata['min_error']),
-        'n_anomalies': int(result.metadata['n_anomalies']),
-        'n_samples': int(result.metadata['n_samples']),
-        'anomaly_rate': float(result.metadata['anomaly_rate'])
+        'test_loss': test_loss,
+        'mean_error': mean_error,
+        'std_error': std_error,
+        'median_error': median_error,
+        'max_error': max_error,
+        'min_error': min_error,
+        'threshold_95': threshold_95,
+        'threshold_99': threshold_99,
+        'n_samples': int(len(reconstruction_errors)),
+        'n_anomalies_95': n_anomalies_95,
+        'n_anomalies_99': n_anomalies_99,
+        'anomaly_rate_95': float(n_anomalies_95 / len(reconstruction_errors)),
+        'anomaly_rate_99': float(n_anomalies_99 / len(reconstruction_errors))
     }
 
-    results_path = exp_dir / 'results.json'
-    with open(results_path, 'w') as f:
+    eval_results_path = exp_dir / 'evaluation_results.json'
+    with open(eval_results_path, 'w') as f:
         json.dump(results_dict, f, indent=2)
-    print(f"\nResults saved to {results_path}")
+    print(f"\nEvaluation results saved to {eval_results_path}")
+
+    # Load training history if available
+    history_path = exp_dir / 'training_history.json'
+    history = None
+    if history_path.exists():
+        print(f"\nLoading training history from {history_path}")
+        with open(history_path, 'r') as f:
+            history = json.load(f)
 
     # Generate plots
     print("\nGenerating evaluation plots...")
     plotter = Plotter.from_config(config)
+    plots_dir = exp_dir / 'plots'
+    plots_dir.mkdir(exist_ok=True)
 
-    # Plot reconstruction error
-    fig = plotter.plot_reconstruction_error(result.reconstruction_errors)
-    plotter.save_figure(fig, exp_dir / 'plots' / 'reconstruction_error')
+    # Plot 1: Training history (if available)
+    if history is not None:
+        print("  - Training history plot")
+        fig = plotter.plot_training_history(history, title="Training History")
+        plotter.save_figure(fig, plots_dir / 'training_history')
 
-    # Plot error distribution
-    fig = plotter.plot_error_distribution(result.reconstruction_errors, threshold=result.threshold)
-    plotter.save_figure(fig, exp_dir / 'plots' / 'error_distribution')
+    # Plot 2: Reconstruction error over samples
+    print("  - Reconstruction error plot")
+    fig = plotter.plot_reconstruction_error(reconstruction_errors, title="Test Set Reconstruction Errors")
+    plotter.save_figure(fig, plots_dir / 'test_reconstruction_error')
 
-    # Plot reconstruction comparison for a few samples
-    predictions = detector.model.predict(test_x[:5], verbose=0)
-    fig = plotter.plot_reconstruction(
-        test_x[:5],
-        predictions,
-        idx=0,
-        feature_names=feature_names,
-        title="Test Set Reconstruction"
+    # Plot 3: Error distribution with thresholds
+    print("  - Error distribution plot")
+    fig = plotter.plot_error_distribution(
+        reconstruction_errors,
+        threshold=threshold_95,
+        title="Test Set Error Distribution (95th percentile threshold)"
     )
-    plotter.save_figure(fig, exp_dir / 'plots' / 'test_reconstruction')
+    plotter.save_figure(fig, plots_dir / 'test_error_distribution')
 
-    print(f"\nPlots saved to {exp_dir / 'plots'}")
+    # Plot 4: Threshold analysis
+    print("  - Threshold analysis plot")
+    fig = plotter.plot_threshold_analysis(
+        reconstruction_errors,
+        thresholds=[threshold_95, threshold_99],
+        title="Threshold Analysis"
+    )
+    plotter.save_figure(fig, plots_dir / 'test_threshold_analysis')
+
+    # Plot 5: Sample reconstructions
+    print("  - Sample reconstruction comparisons")
+    n_samples_to_plot = min(5, test_x.shape[0])
+    for i in range(n_samples_to_plot):
+        fig = plotter.plot_reconstruction(
+            test_x[i:i+1],
+            predictions[i:i+1],
+            idx=0,
+            feature_names=feature_names,
+            title=f"Test Sample {i+1} Reconstruction (Error: {reconstruction_errors[i]:.6f})"
+        )
+        plotter.save_figure(fig, plots_dir / f'test_reconstruction_sample_{i+1}')
+
+    print(f"\nAll plots saved to {plots_dir}")
     print("\nEvaluation completed successfully!")
 
 

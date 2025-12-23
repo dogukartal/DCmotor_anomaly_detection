@@ -134,7 +134,7 @@ class Plotter:
                              history: Dict[str, List[float]],
                              title: str = "Training History") -> plt.Figure:
         """
-        Plot training history (loss curves).
+        Plot training history with multiple subplots for different metrics.
 
         Args:
             history: Training history dictionary
@@ -143,19 +143,72 @@ class Plotter:
         Returns:
             Matplotlib figure
         """
-        fig, ax = plt.subplots(figsize=self.figsize)
+        # Determine number of subplots needed
+        has_physics = 'val_physics_loss' in history
+        has_lr = 'lr' in history
 
-        # Plot loss
+        # Calculate number of rows needed
+        n_rows = 1  # Main loss plot
+        if has_physics:
+            n_rows += 1  # Physics loss components
+        if has_lr:
+            n_rows += 1  # Learning rate
+
+        fig, axes = plt.subplots(n_rows, 1, figsize=(self.figsize[0], 4 * n_rows))
+
+        # Ensure axes is always a list
+        if n_rows == 1:
+            axes = [axes]
+
+        current_ax_idx = 0
+
+        # Plot 1: Main Loss
+        ax = axes[current_ax_idx]
+        current_ax_idx += 1
+
         if 'loss' in history:
             ax.plot(history['loss'], label='Training Loss', linewidth=2)
         if 'val_loss' in history:
             ax.plot(history['val_loss'], label='Validation Loss', linewidth=2)
 
-        ax.set_xlabel('Epoch')
         ax.set_ylabel('Loss')
         ax.set_title(title)
         ax.legend()
         ax.grid(True, alpha=0.3)
+
+        # Plot 2: Physics Loss Components (if available)
+        if has_physics:
+            ax = axes[current_ax_idx]
+            current_ax_idx += 1
+
+            if 'val_physics_loss' in history:
+                ax.plot(history['val_physics_loss'], label='Total Physics Loss', linewidth=2, color='purple')
+            if 'val_electrical_loss' in history:
+                ax.plot(history['val_electrical_loss'], label='Electrical Loss', linewidth=2, color='blue', alpha=0.7)
+            if 'val_mechanical_loss' in history:
+                ax.plot(history['val_mechanical_loss'], label='Mechanical Loss', linewidth=2, color='green', alpha=0.7)
+
+            ax.set_ylabel('Physics Loss')
+            ax.set_title('Physics Loss Components')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+
+        # Plot 3: Learning Rate (if available)
+        if has_lr:
+            ax = axes[current_ax_idx]
+            current_ax_idx += 1
+
+            ax.plot(history['lr'], label='Learning Rate', linewidth=2, color='red')
+            ax.set_ylabel('Learning Rate')
+            ax.set_xlabel('Epoch')
+            ax.set_title('Learning Rate Schedule')
+            ax.set_yscale('log')  # Log scale for better visibility
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+        else:
+            # Add xlabel to the last plot
+            axes[-1].set_xlabel('Epoch')
+
         plt.tight_layout()
         return fig
 
