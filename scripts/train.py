@@ -22,15 +22,52 @@ from src.visualization.plotter import Plotter
 
 def main():
     parser = argparse.ArgumentParser(description='Train LSTM Autoencoder')
-    parser.add_argument('--config', type=str, required=True, help='Path to configuration file')
-    parser.add_argument('--data', type=str, required=True, help='Path to processed data (.npz)')
+    parser.add_argument('--model-config', type=str, help='Model config ID or path (default: default)')
+    parser.add_argument('--sim-id', type=str, help='Simulation ID to use data from (default: from model config)')
+    parser.add_argument('--data', type=str, help='Path to processed data (optional, auto-detected from sim-id)')
     parser.add_argument('--resume', type=str, help='Path to checkpoint to resume from (optional)')
     args = parser.parse_args()
 
-    # Load configuration
-    print(f"Loading configuration from {args.config}")
-    config = ConfigManager.load(args.config)
-    ConfigManager.validate(config)
+    # Load model configuration
+    if args.model_config:
+        if args.model_config.endswith('.json'):
+            # Full path provided
+            print(f"Loading model configuration from {args.model_config}")
+            model_config = ConfigManager.load(args.model_config)
+            ConfigManager.validate(model_config, config_type='model')
+        else:
+            # ID provided
+            print(f"Loading model configuration: {args.model_config}")
+            model_config = ConfigManager.load_model_config(args.model_config)
+    else:
+        # Use default
+        print("Loading default model configuration")
+        model_config = ConfigManager.load_model_config('default')
+
+    # Determine simulation ID
+    simulation_id = args.sim_id if args.sim_id else model_config.get('simulation_id', 'default')
+    print(f"Simulation ID: {simulation_id}")
+
+    # Load simulation configuration (needed for physics loss motor params)
+    print(f"Loading simulation configuration: {simulation_id}")
+    simulation_config = ConfigManager.load_simulation_config(simulation_id)
+
+    # Merge configs for backward compatibility with existing code
+    config = ConfigManager.merge_configs(simulation_config, model_config)
+
+    # Determine data path
+    if args.data:
+        data_path = Path(args.data)
+    else:
+        # Auto-detect from simulation_id
+        processed_dir = ConfigManager.get_simulation_data_path(simulation_id, 'processed')
+        data_path = processed_dir / 'processed_data.npz'
+
+    if not data_path.exists():
+        raise FileNotFoundError(
+            f"Processed data not found: {data_path}\n"
+            f"Please run process_data.py first with --sim-id {simulation_id}"
+        )
 
     # Create experiment
     print("Creating experiment...")
@@ -40,8 +77,8 @@ def main():
     print(f"Experiment directory: {exp_paths.root}")
 
     # Load processed data
-    print(f"Loading processed data from {args.data}")
-    loaded_data = np.load(args.data, allow_pickle=True)
+    print(f"Loading processed data from {data_path}")
+    loaded_data = np.load(data_path, allow_pickle=True)
     windows = loaded_data['windows']
     feature_names = list(loaded_data['feature_names'])
 
@@ -80,7 +117,7 @@ def main():
     # Setup physics loss
     physics_loss = None
     normalizer = None
-    normalizer_path = Path(args.data).parent / 'normalizer_stats.json'
+    normalizer_path = data_path.parent / 'normalizer_stats.json'
 
     if config.get('physics_loss', {}).get('enabled', True):
         print("Setting up physics-informed loss...")
