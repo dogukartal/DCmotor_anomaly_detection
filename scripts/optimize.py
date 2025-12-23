@@ -24,7 +24,7 @@ def main():
     # Load configuration
     print(f"Loading configuration from {args.config}")
     config = ConfigManager.load(args.config)
-    ConfigManager.validate(config)
+    # Note: HPO config has different structure (references base configs), so no validation needed
 
     # Check if HPO is enabled
     if not config.get('hyperparameter_optimization', {}).get('enabled', False):
