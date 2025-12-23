@@ -60,31 +60,27 @@ pip install -r requirements.txt
 Generate DC motor simulation data using the default simulation configuration:
 
 ```bash
-python scripts/simulate.py --config configs/simulation/default.json
+python scripts/simulate.py --sim-config default
 ```
 
-This creates `data/raw/simulation_result.npy` containing voltage, current, and angular velocity time series.
+This creates `data/raw/default/simulation_result.npy` containing voltage, current, and angular velocity time series.
 
 ### 2. Process Data
 
 Downsample, extract features, and create windows using the model configuration:
 
 ```bash
-python scripts/process_data.py \
-  --config configs/model/default.json \
-  --input data/raw/simulation_result.npy
+python scripts/process_data.py --model-config default
 ```
 
-This creates `data/processed/processed_data.npz` with windowed sequences ready for training.
+This creates `data/processed/default/processed_data.npz` with windowed sequences ready for training.
 
 ### 3. Train Model
 
 Train the LSTM autoencoder with the model configuration:
 
 ```bash
-python scripts/train.py \
-  --config configs/model/default.json \
-  --data data/processed/processed_data.npz
+python scripts/train.py --model-config default
 ```
 
 This creates an experiment directory (e.g., `experiments/exp_001_<timestamp>_<params>`) containing:
@@ -98,8 +94,7 @@ This creates an experiment directory (e.g., `experiments/exp_001_<timestamp>_<pa
 Evaluate the trained model on the test set:
 
 ```bash
-python scripts/evaluate.py \
-  --experiment experiments/exp_001_<timestamp>_<params>
+python scripts/evaluate.py --experiment experiments/exp_001_<timestamp>_<params>
 ```
 
 This generates evaluation metrics and reconstruction visualizations in the experiment directory.
@@ -111,7 +106,7 @@ Detect anomalies in new simulation data:
 ```bash
 python scripts/infer.py \
   --experiment experiments/exp_001_<timestamp>_<params> \
-  --input data/processed/new_data.npz
+  --input data/processed/default/processed_data.npz
 ```
 
 This outputs anomaly scores and detection results.
@@ -124,20 +119,18 @@ Run the complete pipeline from simulation to evaluation:
 
 ```bash
 # Step 1: Generate DC motor simulation data
-python scripts/simulate.py --config configs/simulation/default.json
-# Output: data/raw/simulation_result.npy
+python scripts/simulate.py --sim-config default
+# Output: data/raw/default/simulation_result.npy
 
 # Step 2: Process raw data (downsample, extract features, create windows)
-python scripts/process_data.py \
-  --config configs/model/default.json \
-  --input data/raw/simulation_result.npy
-# Output: data/processed/processed_data.npz
+python scripts/process_data.py --model-config default
+# Output: data/processed/default/processed_data.npz
+# Automatically detects data from simulation ID "default"
 
 # Step 3: Train LSTM autoencoder
-python scripts/train.py \
-  --config configs/model/default.json \
-  --data data/processed/processed_data.npz
+python scripts/train.py --model-config default
 # Output: experiments/exp_001_<timestamp>_<params>/
+# Automatically uses data from simulation ID "default"
 
 # Step 4: Evaluate trained model on test set
 python scripts/evaluate.py --experiment experiments/exp_001_<timestamp>_<params>
@@ -146,7 +139,7 @@ python scripts/evaluate.py --experiment experiments/exp_001_<timestamp>_<params>
 # Step 5: Run inference on new data (optional)
 python scripts/infer.py \
   --experiment experiments/exp_001_<timestamp>_<params> \
-  --input data/processed/new_data.npz
+  --input data/processed/default/processed_data.npz
 # Output: anomaly scores and detection results
 ```
 
@@ -161,7 +154,7 @@ Find optimal hyperparameters using Optuna:
 # Step 2: Run hyperparameter optimization
 python scripts/optimize.py \
   --config configs/hpo/hpo_config.json \
-  --data data/processed/processed_data.npz
+  --data data/processed/default/processed_data.npz
 # This runs multiple trials exploring the parameter space
 # Output: experiments/hpo_study/
 
@@ -171,8 +164,7 @@ cat experiments/hpo_study/study_summary.json
 
 # Step 4: Train final model with best configuration
 python scripts/train.py \
-  --config experiments/hpo_study/best_config.json \
-  --data data/processed/processed_data.npz
+  --model-config experiments/hpo_study/best_config.json
 # Output: experiments/exp_002_<timestamp>_<params>/
 
 # Step 5: Evaluate optimized model
@@ -198,29 +190,35 @@ Optimizable parameters include:
 Create custom configurations for specific experiments:
 
 ```bash
-# Step 1: Copy base configurations
-cp configs/simulation/default.json my_simulation.json
-cp configs/model/default.json my_model.json
+# Step 1: Copy and edit base configurations
+cp configs/simulation/default.json configs/simulation/my_experiment.json
+cp configs/model/default.json configs/model/my_experiment.json
+# Edit my_experiment.json files:
+# - Set "simulation_id": "my_experiment" in both files
+# - Modify simulation parameters (motor params, load conditions, etc.)
+# - Modify model architecture, training settings, etc.
 
-# Step 2: Edit configurations
-# Modify my_simulation.json for different motor parameters, load conditions, etc.
-# Modify my_model.json for different model architecture, training settings, etc.
+# Step 2: Run simulation with custom config
+python scripts/simulate.py --sim-config configs/simulation/my_experiment.json
+# Output: data/raw/my_experiment/simulation_result.npy
 
-# Step 3: Run simulation with custom config
-python scripts/simulate.py --config my_simulation.json
+# Step 3: Process data with custom model config
+python scripts/process_data.py --model-config configs/model/my_experiment.json
+# Output: data/processed/my_experiment/processed_data.npz
+# Automatically uses sim-id from model config
 
-# Step 4: Process data with custom model config
-python scripts/process_data.py \
-  --config my_model.json \
-  --input data/raw/simulation_result.npy
+# Step 4: Train with custom configuration
+python scripts/train.py --model-config configs/model/my_experiment.json
+# Output: experiments/exp_003_<timestamp>_<params>/
 
-# Step 5: Train with custom configuration
-python scripts/train.py \
-  --config my_model.json \
-  --data data/processed/processed_data.npz
-
-# Step 6: Evaluate
+# Step 5: Evaluate
 python scripts/evaluate.py --experiment experiments/exp_003_<timestamp>_<params>
+
+# Alternative: Use config IDs instead of full paths
+# After saving configs as configs/simulation/my_experiment.json
+python scripts/simulate.py --sim-config my_experiment
+python scripts/process_data.py --model-config my_experiment
+python scripts/train.py --model-config my_experiment
 ```
 
 ## Configuration
