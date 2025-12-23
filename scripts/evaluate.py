@@ -40,7 +40,7 @@ def main():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
     print(f"Loading model from checkpoint: {checkpoint_path}")
-    model = keras.models.load_model(checkpoint_path)
+    model = keras.models.load_model(checkpoint_path, safe_mode=False)
     print("Model loaded successfully")
 
     # Load data
