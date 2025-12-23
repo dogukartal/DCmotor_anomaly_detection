@@ -115,6 +115,46 @@ class LearningRateLogger(keras.callbacks.Callback):
             logs['lr'] = lr
 
 
+class PhysicsLossTracker(keras.callbacks.Callback):
+    """Callback to track physics loss components during training."""
+
+    def __init__(self, physics_loss, val_data: tf.data.Dataset):
+        """
+        Initialize PhysicsLossTracker.
+
+        Args:
+            physics_loss: PhysicsInformedLoss instance
+            val_data: Validation dataset for computing physics loss
+        """
+        super().__init__()
+        self.physics_loss = physics_loss
+        self.val_data = val_data
+
+    def on_epoch_end(self, epoch, logs=None):
+        """Track physics loss components at end of epoch."""
+        if logs is None:
+            logs = {}
+
+        # Only compute if physics loss is enabled and past start epoch
+        if self.physics_loss.enabled and epoch >= self.physics_loss.start_epoch:
+            # Get a batch from validation data
+            for x_val, y_val in self.val_data.take(1):
+                y_pred = self.model.predict(x_val, verbose=0)
+                y_pred_tf = tf.convert_to_tensor(y_pred, dtype=tf.float32)
+                y_val_tf = tf.convert_to_tensor(y_val, dtype=tf.float32)
+
+                # Compute loss components
+                components = self.physics_loss.compute_loss_components(y_val_tf, y_pred_tf)
+
+                # Log components
+                logs['val_physics_loss'] = float(components['physics'].numpy())
+                logs['val_electrical_loss'] = float(components['electrical'].numpy())
+                logs['val_mechanical_loss'] = float(components['mechanical'].numpy())
+                logs['val_reconstruction_loss'] = float(components['reconstruction'].numpy())
+
+                break
+
+
 def create_callbacks(config: Dict[str, Any],
                     experiment_paths,
                     physics_loss = None,
@@ -203,6 +243,16 @@ def create_callbacks(config: Dict[str, Any],
     # Learning rate logger
     lr_logger = LearningRateLogger()
     callbacks.append(lr_logger)
+
+    # Physics loss tracker
+    if physics_loss is not None and val_data is not None:
+        physics_config = config.get('physics_loss', {})
+        if physics_config.get('enabled', True):
+            physics_tracker = PhysicsLossTracker(
+                physics_loss=physics_loss,
+                val_data=val_data
+            )
+            callbacks.append(physics_tracker)
 
     # Plot callback (optional)
     if val_data is not None and plotter is not None and feature_names is not None:
