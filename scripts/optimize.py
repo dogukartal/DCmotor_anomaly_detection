@@ -16,15 +16,21 @@ from src.optimization.hpo import HyperparameterOptimizer
 
 def main():
     parser = argparse.ArgumentParser(description='Run hyperparameter optimization')
-    parser.add_argument('--config', type=str, required=True, help='Path to configuration file with HPO settings')
+    parser.add_argument('--config', type=str, required=True, help='Path to HPO configuration file')
     parser.add_argument('--data', type=str, required=True, help='Path to processed data (.npz)')
     parser.add_argument('--output', type=str, help='Output directory (default: experiments/hpo_study)')
     args = parser.parse_args()
 
-    # Load configuration
-    print(f"Loading configuration from {args.config}")
-    config = ConfigManager.load(args.config)
-    # Note: HPO config has different structure (references base configs), so no validation needed
+    # Load and merge HPO configuration with base configs
+    print(f"Loading HPO configuration from {args.config}")
+    try:
+        config = ConfigManager.load_hpo_config(args.config)
+        print(f"Successfully merged with base configs:")
+        print(f"  - Simulation: {ConfigManager.load(args.config)['base_configs']['simulation']}")
+        print(f"  - Model: {ConfigManager.load(args.config)['base_configs']['model']}")
+    except (FileNotFoundError, ValueError) as e:
+        print(f"ERROR loading HPO configuration: {e}")
+        sys.exit(1)
 
     # Check if HPO is enabled
     if not config.get('hyperparameter_optimization', {}).get('enabled', False):
