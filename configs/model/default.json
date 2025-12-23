@@ -80,49 +80,6 @@
     }
   },
 
-  "hyperparameter_optimization": {
-    "enabled": false,
-    "n_trials": 50,
-    "metric": "val_loss",
-    "direction": "minimize",
-    "parameters": {
-      "model.encoder_units": {
-        "type": "categorical",
-        "choices": [[32], [64], [64, 32], [128, 64]]
-      },
-      "model.bottleneck.units": {
-        "type": "int",
-        "low": 8,
-        "high": 64,
-        "step": 8
-      },
-      "training.optimizer.learning_rate": {
-        "type": "loguniform",
-        "low": 1e-5,
-        "high": 1e-2
-      },
-      "training.batch_size": {
-        "type": "categorical",
-        "choices": [16, 32, 64, 128]
-      },
-      "data_processing.window_size": {
-        "type": "categorical",
-        "choices": [32, 64, 128, 256]
-      },
-      "physics_loss.weight": {
-        "type": "uniform",
-        "low": 0.01,
-        "high": 1.0
-      },
-      "physics_loss.start_epoch": {
-        "type": "int",
-        "low": 0,
-        "high": 30,
-        "step": 5
-      }
-    }
-  },
-
   "plotting": {
     "save_format": "png",
     "dpi": 150,

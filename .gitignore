@@ -34,7 +34,7 @@ env/
 
 # Data and experiments
 data/
-experiments/
+/experiments/
 
 # Model checkpoints
 *.h5
