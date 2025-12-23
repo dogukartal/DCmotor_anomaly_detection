@@ -17,8 +17,12 @@ A comprehensive physics-informed LSTM autoencoder system for detecting anomalies
 ```
 dc_motor_anomaly/
 ├── configs/
-│   ├── default.json                 # Master default configuration
-│   └── experiments/                 # User experiment configs
+│   ├── simulation/
+│   │   └── default.json             # DC motor simulation parameters
+│   ├── model/
+│   │   └── default.json             # Model, training, and data processing config
+│   └── hpo/
+│       └── hpo_config.json          # Hyperparameter optimization config
 │
 ├── src/
 │   ├── simulation/                  # DC motor simulation
@@ -53,108 +57,211 @@ pip install -r requirements.txt
 
 ### 1. Run Simulation
 
-Generate DC motor simulation data:
+Generate DC motor simulation data using the default simulation configuration:
 
 ```bash
-python scripts/simulate.py --config configs/default.json
+python scripts/simulate.py --config configs/simulation/default.json
 ```
+
+This creates `data/raw/simulation_result.npy` containing voltage, current, and angular velocity time series.
 
 ### 2. Process Data
 
-Downsample, extract features, and create windows:
+Downsample, extract features, and create windows using the model configuration:
 
 ```bash
 python scripts/process_data.py \
-  --config configs/default.json \
+  --config configs/model/default.json \
   --input data/raw/simulation_result.npy
 ```
 
+This creates `data/processed/processed_data.npz` with windowed sequences ready for training.
+
 ### 3. Train Model
 
-Train LSTM autoencoder:
+Train the LSTM autoencoder with the model configuration:
 
 ```bash
 python scripts/train.py \
-  --config configs/default.json \
+  --config configs/model/default.json \
   --data data/processed/processed_data.npz
 ```
 
+This creates an experiment directory (e.g., `experiments/exp_001_<timestamp>_<params>`) containing:
+- Trained model checkpoints (best and last)
+- Training history and logs
+- Visualization plots
+- Frozen configuration file
+
 ### 4. Evaluate Model
 
-Evaluate on test set:
+Evaluate the trained model on the test set:
 
 ```bash
 python scripts/evaluate.py \
-  --experiment experiments/exp_001_<...>
+  --experiment experiments/exp_001_<timestamp>_<params>
 ```
+
+This generates evaluation metrics and reconstruction visualizations in the experiment directory.
 
 ### 5. Run Inference
 
-Detect anomalies in new data:
+Detect anomalies in new simulation data:
 
 ```bash
 python scripts/infer.py \
-  --experiment experiments/exp_001_<...> \
+  --experiment experiments/exp_001_<timestamp>_<params> \
   --input data/processed/new_data.npz
 ```
+
+This outputs anomaly scores and detection results.
 
 ## Workflows
 
 ### Workflow A: Complete First-Time Pipeline
 
+Run the complete pipeline from simulation to evaluation:
+
 ```bash
-# 1. Create custom config (optional)
-cp configs/default.json configs/experiments/my_experiment.json
+# Step 1: Generate DC motor simulation data
+python scripts/simulate.py --config configs/simulation/default.json
+# Output: data/raw/simulation_result.npy
 
-# 2. Generate simulation data
-python scripts/simulate.py --config configs/experiments/my_experiment.json
-
-# 3. Process data
+# Step 2: Process raw data (downsample, extract features, create windows)
 python scripts/process_data.py \
-  --config configs/experiments/my_experiment.json \
+  --config configs/model/default.json \
   --input data/raw/simulation_result.npy
+# Output: data/processed/processed_data.npz
 
-# 4. Train model
+# Step 3: Train LSTM autoencoder
 python scripts/train.py \
-  --config configs/experiments/my_experiment.json \
+  --config configs/model/default.json \
   --data data/processed/processed_data.npz
+# Output: experiments/exp_001_<timestamp>_<params>/
 
-# 5. Evaluate
-python scripts/evaluate.py --experiment experiments/exp_001_<...>
+# Step 4: Evaluate trained model on test set
+python scripts/evaluate.py --experiment experiments/exp_001_<timestamp>_<params>
+# Output: results.json and evaluation plots in experiment directory
+
+# Step 5: Run inference on new data (optional)
+python scripts/infer.py \
+  --experiment experiments/exp_001_<timestamp>_<params> \
+  --input data/processed/new_data.npz
+# Output: anomaly scores and detection results
 ```
 
 ### Workflow B: Hyperparameter Optimization
 
+Find optimal hyperparameters using Optuna:
+
 ```bash
-# 1. Enable HPO in config
-# Set hyperparameter_optimization.enabled = true in your config
+# Step 1: Ensure you have processed data ready
+# (Follow Workflow A steps 1-2 if not already done)
 
-# 2. Run optimization
+# Step 2: Run hyperparameter optimization
 python scripts/optimize.py \
-  --config configs/experiments/hpo_config.json \
+  --config configs/hpo/hpo_config.json \
   --data data/processed/processed_data.npz
+# This runs multiple trials exploring the parameter space
+# Output: experiments/hpo_study/
 
-# 3. Train with best config
+# Step 3: Review optimization results
+cat experiments/hpo_study/study_summary.json
+# Contains best parameters and trial history
+
+# Step 4: Train final model with best configuration
 python scripts/train.py \
   --config experiments/hpo_study/best_config.json \
   --data data/processed/processed_data.npz
+# Output: experiments/exp_002_<timestamp>_<params>/
+
+# Step 5: Evaluate optimized model
+python scripts/evaluate.py --experiment experiments/exp_002_<timestamp>_<params>
+```
+
+**HPO Configuration Details:**
+
+The `configs/hpo/hpo_config.json` defines:
+- **n_trials**: Number of optimization trials (default: 50)
+- **metric**: Metric to optimize (e.g., "val_loss")
+- **direction**: "minimize" or "maximize"
+- **parameters**: Search space for each hyperparameter
+
+Optimizable parameters include:
+- Model architecture (encoder units, bottleneck size)
+- Training parameters (learning rate, batch size)
+- Data processing (window size)
+- Physics loss (weight, start epoch)
+
+### Workflow C: Custom Experiment Configuration
+
+Create custom configurations for specific experiments:
+
+```bash
+# Step 1: Copy base configurations
+cp configs/simulation/default.json my_simulation.json
+cp configs/model/default.json my_model.json
+
+# Step 2: Edit configurations
+# Modify my_simulation.json for different motor parameters, load conditions, etc.
+# Modify my_model.json for different model architecture, training settings, etc.
+
+# Step 3: Run simulation with custom config
+python scripts/simulate.py --config my_simulation.json
+
+# Step 4: Process data with custom model config
+python scripts/process_data.py \
+  --config my_model.json \
+  --input data/raw/simulation_result.npy
+
+# Step 5: Train with custom configuration
+python scripts/train.py \
+  --config my_model.json \
+  --data data/processed/processed_data.npz
+
+# Step 6: Evaluate
+python scripts/evaluate.py --experiment experiments/exp_003_<timestamp>_<params>
 ```
 
 ## Configuration
 
-The system is highly configurable through JSON files. Key configuration sections:
+The system uses separate configuration files for different aspects:
 
-- **experiment**: Name, description, experiment tracking
-- **input_generator**: Voltage signal generation (step, ramp, sinusoidal, etc.)
-- **simulation**: DC motor parameters (R, L, Kt, Ke, J, B)
-- **data_processing**: Downsampling, feature extraction, windowing
-- **normalization**: Data normalization (minmax, standard, robust)
-- **model**: LSTM architecture (encoder, decoder, bottleneck)
-- **physics_loss**: Physics-informed loss settings
-- **training**: Optimizer, learning rate, callbacks
-- **hyperparameter_optimization**: Optuna settings
+### Simulation Configuration (`configs/simulation/default.json`)
 
-See `configs/default.json` for full configuration schema.
+Controls DC motor simulation parameters:
+- **experiment**: Experiment name and tracking
+- **input_generator**: Voltage signal generation (step, ramp, sinusoidal, chirp, noise)
+- **simulation**: DC motor parameters (resistance, inductance, torque constant, back-EMF constant, inertia, friction)
+- **solver**: ODE solver settings (method, tolerances)
+
+### Model Configuration (`configs/model/default.json`)
+
+Controls data processing, model architecture, and training:
+- **experiment**: Name, description, auto-increment ID
+- **data_processing**: Downsampling rate, derived features, windowing parameters, train/val/test split
+- **normalization**: Method (minmax, standard, robust) and feature range
+- **model**: LSTM architecture (encoder/decoder layers, bottleneck, dropout, activation functions)
+- **physics_loss**: Physics-informed loss weight and schedule
+- **training**: Optimizer, learning rate, batch size, epochs, callbacks (early stopping, LR scheduler)
+- **plotting**: Visualization settings
+
+### HPO Configuration (`configs/hpo/hpo_config.json`)
+
+Controls hyperparameter optimization:
+- **base_configs**: References to simulation and model configs to use as base
+- **hyperparameter_optimization**: Optuna settings including:
+  - **enabled**: Must be `true` for HPO
+  - **n_trials**: Number of optimization trials
+  - **metric**: Metric to optimize (e.g., "val_loss")
+  - **direction**: "minimize" or "maximize"
+  - **parameters**: Search space definitions for each hyperparameter
+
+Each parameter can be:
+- **categorical**: Discrete choices (e.g., `[32, 64, 128]`)
+- **int**: Integer range with step (e.g., `low: 8, high: 64, step: 8`)
+- **uniform**: Continuous range (e.g., `low: 0.01, high: 1.0`)
+- **loguniform**: Log-scale continuous range (e.g., `low: 1e-5, high: 1e-2`)
 
 ## Key Components
 
@@ -218,57 +325,6 @@ experiments/exp_XXX_<...>/
 ├── normalizer_stats.json
 └── results.json                   # Evaluation metrics
 ```
-
-## Example Use Cases
-
-1. **Baseline Detection**: Train on normal operation, detect bearing wear
-2. **Parameter Variation**: Simulate different motor parameters (friction, inertia)
-3. **Load Changes**: Detect abnormal load conditions
-4. **Voltage Anomalies**: Identify irregular voltage inputs
-5. **Multi-fault Detection**: Train on multiple failure modes
-
-## Advanced Features
-
-### Custom Voltage Signals
-
-Generate custom voltage inputs programmatically:
-
-```python
-from src.simulation.input_generator import VoltageInputGenerator
-
-gen = VoltageInputGenerator(sampling_rate=20000)
-gen.add_signal('step', duration=0.5, amplitude=12.0)
-gen.add_signal('chirp', duration=1.0, amplitude=10.0,
-               start_frequency_hz=1.0, end_frequency_hz=50.0)
-voltage = gen.generate()
-```
-
-### Custom Features
-
-Add custom derived features in `src/data/processor.py`:
-
-```python
-elif feature_type == 'my_custom_feature':
-    feature = # your calculation here
-```
-
-## Performance Tips
-
-- Use GPU for training: TensorFlow will auto-detect
-- Adjust `batch_size` based on available memory
-- Use `window_stride < window_size` for overlapping windows
-- Start with smaller `n_trials` for HPO, then increase
-
-## Troubleshooting
-
-**Issue**: Out of memory during training
-- **Solution**: Reduce `batch_size` or `window_size`
-
-**Issue**: Physics loss causes instability
-- **Solution**: Reduce `physics_loss.weight` or increase `start_epoch`
-
-**Issue**: Poor reconstruction
-- **Solution**: Increase model capacity (encoder/decoder units) or training epochs
 
 ## License
 
