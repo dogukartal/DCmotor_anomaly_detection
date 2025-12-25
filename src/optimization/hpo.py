@@ -78,19 +78,26 @@ class HyperparameterOptimizer:
             loss=training_config['loss']
         )
 
-        # Create temporary experiment directory
+        # Create temporary experiment directory for this trial
+        # Note: hpo_temp stores trial-specific training artifacts (checkpoints, logs)
+        # while hpo_study (output dir) stores final study results (best_config, summary)
         temp_exp_dir = Path('experiments') / 'hpo_temp' / f'trial_{trial.number}'
         temp_exp_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create minimal experiment paths
+        # Save trial parameters to trial directory
+        trial_params_path = temp_exp_dir / 'trial_params.json'
+        with open(trial_params_path, 'w') as f:
+            import json
+            json.dump(trial.params, f, indent=2)
+
+        # Create minimal experiment paths (plots not needed for HPO)
         class TempExpPaths:
             def __init__(self, root):
                 self.root = str(root)
                 self.checkpoints = str(root / 'checkpoints')
-                self.plots = str(root / 'plots')
                 self.logs = str(root / 'logs')
+                self.plots = str(root / 'plots')  # For compatibility, but not created
                 Path(self.checkpoints).mkdir(parents=True, exist_ok=True)
-                Path(self.plots).mkdir(parents=True, exist_ok=True)
                 Path(self.logs).mkdir(parents=True, exist_ok=True)
 
         experiment_paths = TempExpPaths(temp_exp_dir)
