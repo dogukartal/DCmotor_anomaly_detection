@@ -83,7 +83,9 @@
   "plotting": {
     "save_format": "png",
     "dpi": 150,
-    "figsize": [12, 6]
+    "figsize": [12, 6],
+    "plot_interval": 10,
+    "num_samples": 1
   },
 
   "paths": {

@@ -65,7 +65,8 @@ class PlotCallback(keras.callbacks.Callback):
                  plot_dir: str,
                  val_data: tf.data.Dataset,
                  plotter,
-                 feature_names: list):
+                 feature_names: list,
+                 num_samples: int = 1):
         """
         Initialize PlotCallback.
 
@@ -75,6 +76,7 @@ class PlotCallback(keras.callbacks.Callback):
             val_data: Validation dataset for generating plots
             plotter: Plotter instance
             feature_names: List of feature names
+            num_samples: Number of samples to plot (randomly selected and reused)
         """
         super().__init__()
         self.plot_interval = plot_interval
@@ -83,25 +85,50 @@ class PlotCallback(keras.callbacks.Callback):
         self.val_data = val_data
         self.plotter = plotter
         self.feature_names = feature_names
+        self.num_samples = num_samples
+        self.sample_indices = None
+        self.sample_data = None
+
+    def on_train_begin(self, logs=None):
+        """Initialize sample data at the start of training."""
+        import numpy as np
+
+        # Get a batch from validation data
+        for x_val, y_val in self.val_data.take(1):
+            batch_size = x_val.shape[0]
+
+            # Randomly select sample indices
+            self.sample_indices = np.random.choice(
+                batch_size,
+                size=min(self.num_samples, batch_size),
+                replace=False
+            )
+
+            # Store the selected samples
+            self.sample_data = x_val.numpy()[self.sample_indices]
+            print(f"\nSelected {len(self.sample_indices)} random samples for reconstruction plots (indices: {self.sample_indices.tolist()})")
+            break
 
     def on_epoch_end(self, epoch, logs=None):
         """Generate plots at specified intervals."""
         if (epoch + 1) % self.plot_interval == 0:
-            # Get a batch of validation data
-            for x_val, y_val in self.val_data.take(1):
-                y_pred = self.model.predict(x_val, verbose=0)
+            # Use stored sample data
+            if self.sample_data is not None:
+                y_pred = self.model.predict(self.sample_data, verbose=0)
 
-                # Plot reconstruction
-                fig = self.plotter.plot_reconstruction(
-                    x_val.numpy(),
-                    y_pred,
-                    idx=0,
-                    feature_names=self.feature_names,
-                    title=f"Reconstruction at Epoch {epoch+1}"
-                )
-                self.plotter.save_figure(fig, self.plot_dir / f'reconstruction_epoch_{epoch+1:03d}.png')
-
-                break
+                # Plot reconstruction for each sample
+                for i, sample_idx in enumerate(self.sample_indices):
+                    fig = self.plotter.plot_reconstruction(
+                        self.sample_data,
+                        y_pred,
+                        idx=i,
+                        feature_names=self.feature_names,
+                        title=f"Reconstruction at Epoch {epoch+1} (Sample {sample_idx})"
+                    )
+                    self.plotter.save_figure(
+                        fig,
+                        self.plot_dir / f'reconstruction_epoch_{epoch+1:03d}_sample_{sample_idx:02d}.png'
+                    )
 
 
 class LearningRateLogger(keras.callbacks.Callback):
@@ -256,13 +283,16 @@ def create_callbacks(config: Dict[str, Any],
 
     # Plot callback (optional)
     if val_data is not None and plotter is not None and feature_names is not None:
-        plot_interval = config.get('plotting', {}).get('plot_interval', 10)
+        plotting_config = config.get('plotting', {})
+        plot_interval = plotting_config.get('plot_interval', 10)
+        num_samples = plotting_config.get('num_samples', 1)
         plot_callback = PlotCallback(
             plot_interval=plot_interval,
             plot_dir=experiment_paths.plots,
             val_data=val_data,
             plotter=plotter,
-            feature_names=feature_names
+            feature_names=feature_names,
+            num_samples=num_samples
         )
         callbacks.append(plot_callback)
 
