@@ -259,6 +259,73 @@ class Plotter:
         plt.tight_layout()
         return fig
 
+    def plot_multi_sample_reconstruction(self,
+                                        original: np.ndarray,
+                                        reconstructed: np.ndarray,
+                                        sample_indices: np.ndarray,
+                                        feature_names: Optional[List[str]] = None,
+                                        title: str = "Multi-Sample Reconstruction") -> plt.Figure:
+        """
+        Plot multiple samples in a grid layout (rows=features, cols=samples).
+
+        Args:
+            original: Original data (num_samples, seq_len, n_features)
+            reconstructed: Reconstructed data (num_samples, seq_len, n_features)
+            sample_indices: Indices of samples being plotted
+            feature_names: List of feature names
+            title: Plot title
+
+        Returns:
+            Matplotlib figure
+        """
+        num_samples = original.shape[0]
+        n_features = original.shape[2]
+
+        if feature_names is None:
+            feature_names = [f'Feature {i}' for i in range(n_features)]
+
+        # Create grid: rows=features, cols=samples
+        fig, axes = plt.subplots(n_features, num_samples,
+                                figsize=(4 * num_samples, 3 * n_features))
+
+        # Handle single feature or single sample cases
+        if n_features == 1 and num_samples == 1:
+            axes = np.array([[axes]])
+        elif n_features == 1:
+            axes = axes.reshape(1, -1)
+        elif num_samples == 1:
+            axes = axes.reshape(-1, 1)
+
+        # Plot each feature-sample combination
+        for feature_idx in range(n_features):
+            for sample_idx in range(num_samples):
+                ax = axes[feature_idx, sample_idx]
+
+                # Plot original and reconstructed
+                ax.plot(original[sample_idx, :, feature_idx], 'b-',
+                       label='Original', linewidth=1.5, alpha=0.7)
+                ax.plot(reconstructed[sample_idx, :, feature_idx], 'r--',
+                       label='Reconstructed', linewidth=1.5, alpha=0.7)
+
+                # Add labels
+                if sample_idx == 0:
+                    ax.set_ylabel(feature_names[feature_idx], fontsize=10)
+                if feature_idx == 0:
+                    ax.set_title(f'Sample {sample_indices[sample_idx]}', fontsize=10)
+                if feature_idx == n_features - 1:
+                    ax.set_xlabel('Time Step', fontsize=9)
+
+                # Add legend only to the first plot
+                if feature_idx == 0 and sample_idx == 0:
+                    ax.legend(fontsize=8, loc='upper right')
+
+                ax.grid(True, alpha=0.3)
+                ax.tick_params(labelsize=8)
+
+        fig.suptitle(title, fontsize=12, y=0.995)
+        plt.tight_layout()
+        return fig
+
     def plot_reconstruction_error(self,
                                   errors: np.ndarray,
                                   title: str = "Reconstruction Error Over Time") -> plt.Figure:

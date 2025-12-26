@@ -116,19 +116,18 @@ class PlotCallback(keras.callbacks.Callback):
             if self.sample_data is not None:
                 y_pred = self.model.predict(self.sample_data, verbose=0)
 
-                # Plot reconstruction for each sample
-                for i, sample_idx in enumerate(self.sample_indices):
-                    fig = self.plotter.plot_reconstruction(
-                        self.sample_data,
-                        y_pred,
-                        idx=i,
-                        feature_names=self.feature_names,
-                        title=f"Reconstruction at Epoch {epoch+1} (Sample {sample_idx})"
-                    )
-                    self.plotter.save_figure(
-                        fig,
-                        self.plot_dir / f'reconstruction_epoch_{epoch+1:03d}_sample_{sample_idx:02d}.png'
-                    )
+                # Plot all samples in a single grid figure
+                fig = self.plotter.plot_multi_sample_reconstruction(
+                    self.sample_data,
+                    y_pred,
+                    sample_indices=self.sample_indices,
+                    feature_names=self.feature_names,
+                    title=f"Reconstruction at Epoch {epoch+1}"
+                )
+                self.plotter.save_figure(
+                    fig,
+                    self.plot_dir / f'reconstruction_epoch_{epoch+1:03d}.png'
+                )
 
 
 class LearningRateLogger(keras.callbacks.Callback):
