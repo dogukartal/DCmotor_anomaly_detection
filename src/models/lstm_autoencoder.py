@@ -130,28 +130,32 @@ class LSTMAutoencoder:
         Compile the model.
 
         Args:
-            optimizer: Optimizer name
-            learning_rate: Learning rate
-            loss: Loss function name
+            optimizer: Optimizer name or optimizer instance
+            learning_rate: Learning rate (only used if optimizer is a string)
+            loss: Loss function (string name or callable loss function object)
             metrics: List of metric names
         """
         if self.model is None:
             raise ValueError("Model not built. Call build() first.")
 
-        # Create optimizer
-        if optimizer == 'adam':
-            opt = keras.optimizers.Adam(learning_rate=learning_rate)
-        elif optimizer == 'sgd':
-            opt = keras.optimizers.SGD(learning_rate=learning_rate)
-        elif optimizer == 'rmsprop':
-            opt = keras.optimizers.RMSprop(learning_rate=learning_rate)
+        # Create optimizer (if string is provided)
+        if isinstance(optimizer, str):
+            if optimizer == 'adam':
+                opt = keras.optimizers.Adam(learning_rate=learning_rate)
+            elif optimizer == 'sgd':
+                opt = keras.optimizers.SGD(learning_rate=learning_rate)
+            elif optimizer == 'rmsprop':
+                opt = keras.optimizers.RMSprop(learning_rate=learning_rate)
+            else:
+                raise ValueError(f"Unknown optimizer: {optimizer}")
         else:
-            raise ValueError(f"Unknown optimizer: {optimizer}")
+            # Assume it's already an optimizer instance
+            opt = optimizer
 
-        # Compile
+        # Compile (loss can be string or callable)
         self.model.compile(
             optimizer=opt,
-            loss=loss,
+            loss=loss,  # Can now accept both string ('mse') or callable (PhysicsInformedLoss)
             metrics=metrics or []
         )
 
