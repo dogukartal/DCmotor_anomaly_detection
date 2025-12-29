@@ -117,7 +117,7 @@ def main():
             print("  ⚠ Warning: Normalizer not found, physics loss will not denormalize")
 
         target_rate = config['data_processing']['target_sampling_rate_hz']
-        physics_loss = PhysicsInformedLoss.from_config(config, normalizer, sampling_rate=target_rate)
+        physics_loss = PhysicsInformedLoss.from_config(config, normalizer=normalizer, sampling_rate=target_rate)
         print(f"  ✓ Physics loss enabled with weight={physics_loss.physics_weight}")
         print(f"  ✓ Physics loss will activate at epoch {physics_loss.start_epoch}")
 
