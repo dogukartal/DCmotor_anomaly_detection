@@ -93,8 +93,8 @@ class LSTMAutoencoder:
             if self.dropout > 0:
                 x = layers.Dropout(self.dropout, name='bottleneck_dropout')(x)
 
-            # Repeat for decoder
-            x = layers.RepeatVector(self.input_shape[0], name='repeat_vector')(x)
+        # Repeat for decoder
+        x = layers.RepeatVector(self.input_shape[0], name='repeat_vector')(x)
 
         # Decoder
         for i, units in enumerate(self.decoder_units):
