@@ -101,35 +101,48 @@ def main():
     autoencoder.build()
     autoencoder.summary()
 
-    # Compile model
-    training_config = config['training']
-    autoencoder.compile(
-        optimizer=training_config['optimizer']['type'],
-        learning_rate=training_config['optimizer']['learning_rate'],
-        loss=training_config['loss']
-    )
-
-    # Load checkpoint if resuming
-    if args.resume:
-        print(f"Loading checkpoint from {args.resume}")
-        autoencoder.load(args.resume)
-
-    # Setup physics loss
+    # Setup physics loss BEFORE compilation (needed for loss function)
     physics_loss = None
     normalizer = None
     normalizer_path = data_path.parent / 'normalizer_stats.json'
 
     if config.get('physics_loss', {}).get('enabled', True):
-        print("Setting up physics-informed loss...")
+        print("\nSetting up physics-informed loss...")
         # Load normalizer
         if normalizer_path.exists():
             normalizer = Normalizer()
             normalizer.load_statistics(str(normalizer_path))
+            print("  ✓ Loaded normalizer for physics loss denormalization")
         else:
-            print("Warning: Normalizer not found, physics loss will not denormalize")
+            print("  ⚠ Warning: Normalizer not found, physics loss will not denormalize")
 
         target_rate = config['data_processing']['target_sampling_rate_hz']
         physics_loss = PhysicsInformedLoss.from_config(config, normalizer, sampling_rate=target_rate)
+        print(f"  ✓ Physics loss enabled with weight={physics_loss.physics_weight}")
+        print(f"  ✓ Physics loss will activate at epoch {physics_loss.start_epoch}")
+
+    # Compile model (with physics loss if enabled, otherwise use standard loss)
+    training_config = config['training']
+    loss_function = physics_loss if physics_loss is not None else training_config['loss']
+
+    print("\nCompiling model...")
+    print(f"  Optimizer: {training_config['optimizer']['type']}")
+    print(f"  Learning rate: {training_config['optimizer']['learning_rate']}")
+    if physics_loss is not None:
+        print(f"  Loss function: PhysicsInformedLoss (reconstruction + physics constraints)")
+    else:
+        print(f"  Loss function: {training_config['loss']}")
+
+    autoencoder.compile(
+        optimizer=training_config['optimizer']['type'],
+        learning_rate=training_config['optimizer']['learning_rate'],
+        loss=loss_function  # Now using PhysicsInformedLoss if enabled!
+    )
+
+    # Load checkpoint if resuming
+    if args.resume:
+        print(f"\nLoading checkpoint from {args.resume}")
+        autoencoder.load(args.resume)
 
     # Create plotter
     plotter = Plotter.from_config(config)
