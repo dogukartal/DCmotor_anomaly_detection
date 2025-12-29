@@ -58,7 +58,12 @@
         "type": "int",
         "low": 0,
         "high": 30,
-        "step": 5
+        "step": 5,
+        "constraint": {
+          "type": "max_ratio_of",
+          "parameter": "training.epochs",
+          "ratio": 0.5
+        }
       }
     }
   }

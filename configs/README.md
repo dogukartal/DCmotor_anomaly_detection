@@ -108,8 +108,34 @@ You can add constraints to ensure parameter dependencies are satisfied. For exam
 
 **Constraint Types:**
 - `max_from_last`: Ensures the parameter value doesn't exceed the last element of another parameter (useful for list parameters like encoder_units). The `multiplier` allows scaling (e.g., 0.5 for half the size).
+- `max_ratio_of`: Ensures the parameter value doesn't exceed a specified ratio/fraction of another parameter value. The `ratio` parameter specifies the maximum fraction (e.g., 0.5 means the constrained parameter can be at most 50% of the reference parameter). This is useful for ensuring one parameter stays below another, such as `physics_loss.start_epoch` being at most half of `training.epochs`.
 
-**Important:** When using constraints, the dependent parameter (e.g., `model.encoder_units`) must appear **before** the constrained parameter (e.g., `model.bottleneck.units`) in the parameters dictionary.
+**Example with max_ratio_of:**
+```json
+{
+  "training.epochs": {
+    "type": "int",
+    "low": 30,
+    "high": 150,
+    "step": 10
+  },
+  "physics_loss.start_epoch": {
+    "type": "int",
+    "low": 0,
+    "high": 30,
+    "step": 5,
+    "constraint": {
+      "type": "max_ratio_of",
+      "parameter": "training.epochs",
+      "ratio": 0.5
+    }
+  }
+}
+```
+
+In this example, if `training.epochs` is sampled as 100, then `physics_loss.start_epoch` will be constrained to be at most 50 (100 * 0.5).
+
+**Important:** When using constraints, the dependent parameter (e.g., `model.encoder_units` or `training.epochs`) must appear **before** the constrained parameter (e.g., `model.bottleneck.units` or `physics_loss.start_epoch`) in the parameters dictionary.
 
 **Example HPO Config:**
 ```json

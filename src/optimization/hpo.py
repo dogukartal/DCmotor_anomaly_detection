@@ -244,6 +244,75 @@ class HyperparameterOptimizer:
             else:
                 raise ValueError(f"Constraint type 'max_from_last' only supports 'int' parameters")
 
+        # Handle max_ratio_of constraint (e.g., start_epoch <= 0.5 * total_epochs)
+        elif constraint['type'] == 'max_ratio_of':
+            dependent_param = constraint['parameter']
+
+            if dependent_param not in sampled_values:
+                raise ValueError(
+                    f"Constraint depends on '{dependent_param}' but it hasn't been sampled yet. "
+                    f"Ensure '{dependent_param}' appears before '{param_path}' in parameter space."
+                )
+
+            dependent_value = sampled_values[dependent_param]
+
+            # Get the value (handles both scalar and list types)
+            if isinstance(dependent_value, list):
+                # If list, use the last value or sum, depending on context
+                # For most cases, we want the scalar value, so take last
+                ref_value = dependent_value[-1]
+            else:
+                ref_value = dependent_value
+
+            # Apply ratio/gain to calculate maximum allowed value
+            ratio = constraint.get('ratio', 1.0)
+            max_value = ref_value * ratio
+
+            # Sample with constrained upper bound
+            if param_type == 'int':
+                # Convert to int for integer parameters
+                max_value = int(max_value)
+
+                # Ensure the upper bound doesn't exceed original high limit
+                original_high = param_def['high']
+                constrained_high = min(max_value, original_high)
+
+                # Ensure low <= high
+                if param_def['low'] > constrained_high:
+                    # If constraint makes range invalid, use minimum valid value
+                    value = param_def['low']
+                else:
+                    value = trial.suggest_int(
+                        param_path,
+                        param_def['low'],
+                        constrained_high,
+                        step=param_def.get('step', 1)
+                    )
+            elif param_type in ['uniform', 'loguniform']:
+                # For continuous parameters
+                original_high = param_def['high']
+                constrained_high = min(max_value, original_high)
+
+                # Ensure low <= high
+                if param_def['low'] > constrained_high:
+                    # If constraint makes range invalid, use minimum valid value
+                    value = param_def['low']
+                else:
+                    if param_type == 'uniform':
+                        value = trial.suggest_uniform(
+                            param_path,
+                            param_def['low'],
+                            constrained_high
+                        )
+                    else:  # loguniform
+                        value = trial.suggest_loguniform(
+                            param_path,
+                            param_def['low'],
+                            constrained_high
+                        )
+            else:
+                raise ValueError(f"Constraint type 'max_ratio_of' does not support parameter type '{param_type}'")
+
         else:
             raise ValueError(f"Unknown constraint type: {constraint['type']}")
 
