@@ -216,47 +216,82 @@ class PhysicsInformedLoss:
         """
         self.current_epoch = epoch
 
+    def get_config(self) -> Dict[str, Any]:
+        """
+        Get configuration for serialization.
+
+        Returns:
+            Configuration dictionary
+        """
+        return {
+            'motor_params': self.motor_params,
+            'physics_weight': self.physics_weight,
+            'reconstruction_loss': self.reconstruction_loss_type,
+            'start_epoch': self.start_epoch,
+            'enabled': self.enabled,
+            'dt': self.dt,
+            # Note: normalizer is not serialized as it needs to be
+            # provided when loading the model
+        }
+
     @classmethod
-    def from_config(cls,
-                   config: Dict[str, Any],
-                   normalizer = None,
-                   sampling_rate: int = 500) -> 'PhysicsInformedLoss':
+    def from_config(cls, config: Dict[str, Any], **kwargs) -> 'PhysicsInformedLoss':
         """
         Create PhysicsInformedLoss from configuration.
 
+        This method handles two cases:
+        1. Keras serialization: config contains direct loss parameters
+        2. Model config: config contains nested structure with 'physics_loss' key
+
         Args:
             config: Configuration dictionary
-            normalizer: Normalizer object for denormalization
-            sampling_rate: Sampling rate for dt calculation
+            **kwargs: Additional arguments (normalizer, sampling_rate for model config case)
 
         Returns:
             PhysicsInformedLoss instance
         """
-        physics_config = config.get('physics_loss', {})
-        training_config = config.get('training', {})
-
-        enabled = physics_config.get('enabled', True)
-        weight = physics_config.get('weight', 0.1)
-        start_epoch = physics_config.get('start_epoch', 10)
-
-        # Get motor parameters
-        motor_params_source = physics_config.get('motor_params', 'from_simulation')
-        if motor_params_source == 'from_simulation':
-            motor_params = config['simulation']['motor_params']
+        # Check if this is a direct loss config (Keras serialization) or model config
+        if 'motor_params' in config:
+            # Direct config from get_config() - Keras serialization
+            return cls(
+                motor_params=config['motor_params'],
+                physics_weight=config.get('physics_weight', 0.1),
+                reconstruction_loss=config.get('reconstruction_loss', 'mse'),
+                start_epoch=config.get('start_epoch', 10),
+                enabled=config.get('enabled', True),
+                normalizer=kwargs.get('normalizer', None),
+                dt=config.get('dt', 0.002)
+            )
         else:
-            motor_params = motor_params_source
+            # Model config with nested structure - original behavior
+            normalizer = kwargs.get('normalizer', None)
+            sampling_rate = kwargs.get('sampling_rate', 500)
 
-        reconstruction_loss = training_config.get('loss', 'mse')
+            physics_config = config.get('physics_loss', {})
+            training_config = config.get('training', {})
 
-        # Calculate dt
-        dt = 1.0 / sampling_rate
+            enabled = physics_config.get('enabled', True)
+            weight = physics_config.get('weight', 0.1)
+            start_epoch = physics_config.get('start_epoch', 10)
 
-        return cls(
-            motor_params=motor_params,
-            physics_weight=weight,
-            reconstruction_loss=reconstruction_loss,
-            start_epoch=start_epoch,
-            enabled=enabled,
-            normalizer=normalizer,
-            dt=dt
-        )
+            # Get motor parameters
+            motor_params_source = physics_config.get('motor_params', 'from_simulation')
+            if motor_params_source == 'from_simulation':
+                motor_params = config['simulation']['motor_params']
+            else:
+                motor_params = motor_params_source
+
+            reconstruction_loss = training_config.get('loss', 'mse')
+
+            # Calculate dt
+            dt = 1.0 / sampling_rate
+
+            return cls(
+                motor_params=motor_params,
+                physics_weight=weight,
+                reconstruction_loss=reconstruction_loss,
+                start_epoch=start_epoch,
+                enabled=enabled,
+                normalizer=normalizer,
+                dt=dt
+            )
