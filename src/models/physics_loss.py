@@ -93,6 +93,51 @@ class PhysicsInformedLoss:
         else:
             raise ValueError(f"Unknown reconstruction loss: {self.reconstruction_loss_type}")
 
+    def _denormalize_tf(self, y_pred: tf.Tensor) -> tf.Tensor:
+        """
+        Denormalize predictions using TensorFlow operations to maintain gradient flow.
+
+        CRITICAL: This function uses pure TensorFlow operations instead of NumPy
+        to ensure gradients can flow through the denormalization during backpropagation.
+
+        Args:
+            y_pred: Normalized predictions (batch_size, seq_len, n_features)
+
+        Returns:
+            Denormalized predictions in physical units
+        """
+        if self.normalizer is None:
+            return y_pred
+
+        stats = self.normalizer.get_statistics()
+        method = stats['method']
+
+        if method == 'minmax':
+            # MinMax inverse transform: x = (x_scaled - min_range) / (max_range - min_range) * data_range + data_min
+            data_min = tf.constant(stats['min'], dtype=tf.float32)
+            data_range = tf.constant(stats['data_range'], dtype=tf.float32)
+            feature_min, feature_max = stats['feature_range']
+
+            # Inverse transform: x_original = (x_scaled - feature_min) / (feature_max - feature_min) * data_range + data_min
+            y_pred_physical = (y_pred - feature_min) / (feature_max - feature_min) * data_range + data_min
+
+        elif method == 'standard':
+            # Standard inverse transform: x = x_scaled * std + mean
+            mean = tf.constant(stats['mean'], dtype=tf.float32)
+            std = tf.constant(stats['std'], dtype=tf.float32)
+            y_pred_physical = y_pred * std + mean
+
+        elif method == 'robust':
+            # Robust inverse transform: x = x_scaled * scale + center
+            center = tf.constant(stats['center'], dtype=tf.float32)
+            scale = tf.constant(stats['scale'], dtype=tf.float32)
+            y_pred_physical = y_pred * scale + center
+
+        else:
+            raise ValueError(f"Unknown normalization method: {method}")
+
+        return y_pred_physical
+
     def compute_physics_loss(self, y_pred: tf.Tensor) -> tf.Tensor:
         """
         Compute physics constraint loss.
@@ -104,16 +149,9 @@ class PhysicsInformedLoss:
         Returns:
             Physics loss
         """
-        # Denormalize predictions to physical units before computing physics residuals
-        if self.normalizer is not None:
-            # Convert tensor to numpy for denormalization
-            y_pred_np = y_pred.numpy()
-            y_pred_denorm_np = self.normalizer.inverse_transform(y_pred_np)
-            # Convert back to tensor
-            y_pred_physical = tf.convert_to_tensor(y_pred_denorm_np, dtype=tf.float32)
-        else:
-            # If no normalizer, assume predictions are already in physical units
-            y_pred_physical = y_pred
+        # Denormalize predictions to physical units using TensorFlow operations
+        # This maintains gradient flow during backpropagation
+        y_pred_physical = self._denormalize_tf(y_pred)
 
         # Extract variables (assuming order: current, angular_velocity, voltage, ...)
         # Shape: (batch_size, seq_len)
@@ -170,13 +208,8 @@ class PhysicsInformedLoss:
 
         # Only compute physics components if enabled and past start epoch
         if self.enabled and self.current_epoch >= self.start_epoch:
-            # Denormalize predictions
-            if self.normalizer is not None:
-                y_pred_np = y_pred.numpy()
-                y_pred_denorm_np = self.normalizer.inverse_transform(y_pred_np)
-                y_pred_physical = tf.convert_to_tensor(y_pred_denorm_np, dtype=tf.float32)
-            else:
-                y_pred_physical = y_pred
+            # Denormalize predictions using TensorFlow operations to maintain gradient flow
+            y_pred_physical = self._denormalize_tf(y_pred)
 
             # Extract variables
             i_pred = y_pred_physical[:, :, 0]
