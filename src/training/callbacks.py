@@ -54,7 +54,7 @@ class TrainingLogger(keras.callbacks.Callback):
 
         # Save to file
         with open(self.log_filepath, 'w') as f:
-            json.dump(self.history, f, indent=2)
+            json.dump(str(self.history), f, indent=2)
 
 
 class PlotCallback(keras.callbacks.Callback):
