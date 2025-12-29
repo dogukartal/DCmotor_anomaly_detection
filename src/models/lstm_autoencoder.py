@@ -247,17 +247,30 @@ class LSTMAutoencoder:
 
         self.model.save(filepath)
 
-    def load(self, filepath: str) -> 'LSTMAutoencoder':
+    def load(self, filepath: str, custom_objects: Optional[Dict[str, Any]] = None) -> 'LSTMAutoencoder':
         """
         Load model from file.
 
         Args:
             filepath: Path to saved model directory
+            custom_objects: Dictionary of custom objects (e.g., custom loss functions)
 
         Returns:
             Self for method chaining
         """
-        self.model = keras.models.load_model(filepath)
+        # Import here to avoid circular dependency
+        from ..models.physics_loss import PhysicsInformedLoss
+
+        # Default custom objects
+        default_custom_objects = {
+            'PhysicsInformedLoss': PhysicsInformedLoss
+        }
+
+        # Merge with provided custom objects
+        if custom_objects:
+            default_custom_objects.update(custom_objects)
+
+        self.model = keras.models.load_model(filepath, custom_objects=default_custom_objects)
         return self
 
     def summary(self) -> None:
