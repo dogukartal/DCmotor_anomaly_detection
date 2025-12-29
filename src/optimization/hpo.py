@@ -397,7 +397,29 @@ class HyperparameterOptimizer:
         with open(summary_path, 'w') as f:
             json.dump(summary, f, indent=2)
 
+        # Save all trials sorted by validation loss
+        all_trials = []
+        for trial in self.study.trials:
+            trial_data = {
+                'trial_number': trial.number,
+                'value': trial.value,
+                'params': trial.params,
+                'state': trial.state.name
+            }
+            all_trials.append(trial_data)
+
+        # Sort trials by value (ascending for minimize, descending for maximize)
+        reverse = (self.direction == 'maximize')
+        all_trials_sorted = sorted(all_trials, key=lambda x: x['value'] if x['value'] is not None else float('inf'), reverse=reverse)
+
+        trials_path = directory / 'all_trials.json'
+        with open(trials_path, 'w') as f:
+            json.dump(all_trials_sorted, f, indent=2)
+
         print(f"Study results saved to {directory}")
+        print(f"  - Best config: {config_path}")
+        print(f"  - Study summary: {summary_path}")
+        print(f"  - All trials (sorted by {self.metric}): {trials_path}")
 
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> 'HyperparameterOptimizer':
