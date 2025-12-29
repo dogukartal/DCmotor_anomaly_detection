@@ -44,7 +44,8 @@ def main():
 
     # Load processed data
     print(f"Loading processed data from {args.data}")
-    loaded_data = np.load(args.data, allow_pickle=True)
+    data_path = Path(args.data)
+    loaded_data = np.load(data_path, allow_pickle=True)
     windows = loaded_data['windows']
 
     print(f"Data shape: {windows.shape}")
@@ -55,9 +56,17 @@ def main():
     split_ratios = config['data_processing']['train_val_test_split']
     train_ds, val_ds, test_ds = dataset_builder.build(windows, split_ratios=split_ratios)
 
+    # Determine normalizer path (same directory as processed data)
+    normalizer_path = data_path.parent / 'normalizer_stats.json'
+    if normalizer_path.exists():
+        print(f"Found normalizer statistics at {normalizer_path}")
+    else:
+        print(f"⚠ Warning: Normalizer statistics not found at {normalizer_path}")
+        print("  Physics loss will not perform denormalization")
+
     # Create optimizer
     print("\nInitializing hyperparameter optimizer...")
-    optimizer = HyperparameterOptimizer.from_config(config)
+    optimizer = HyperparameterOptimizer.from_config(config, normalizer_path=str(normalizer_path))
 
     hpo_config = config['hyperparameter_optimization']
     print(f"Number of trials: {hpo_config['n_trials']}")

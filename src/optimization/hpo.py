@@ -18,7 +18,8 @@ class HyperparameterOptimizer:
                  n_trials: int = 50,
                  metric: str = 'val_loss',
                  direction: str = 'minimize',
-                 study_name: Optional[str] = None):
+                 study_name: Optional[str] = None,
+                 normalizer_path: Optional[str] = None):
         """
         Initialize HyperparameterOptimizer.
 
@@ -29,6 +30,7 @@ class HyperparameterOptimizer:
             metric: Metric to optimize
             direction: Optimization direction ('minimize' or 'maximize')
             study_name: Name for the optuna study
+            normalizer_path: Path to normalizer statistics file (optional)
         """
         self.base_config = base_config
         self.param_space = param_space
@@ -38,6 +40,7 @@ class HyperparameterOptimizer:
         self.study_name = study_name or 'hpo_study'
         self.study = None
         self.best_config = None
+        self.normalizer_path = normalizer_path
 
     def objective(self, trial: Trial, train_ds: tf.data.Dataset, val_ds: tf.data.Dataset) -> float:
         """
@@ -104,8 +107,17 @@ class HyperparameterOptimizer:
 
         # Setup physics loss if enabled
         physics_loss = None
+        normalizer = None
         if trial_config.get('physics_loss', {}).get('enabled', True):
-            normalizer = Normalizer.from_config(trial_config)
+            # Load normalizer statistics if available
+            if self.normalizer_path and Path(self.normalizer_path).exists():
+                normalizer = Normalizer()
+                normalizer.load_statistics(self.normalizer_path)
+            else:
+                # Fallback: create unfitted normalizer (will skip denormalization)
+                print(f"  ⚠ Warning: Normalizer stats not found at {self.normalizer_path}, physics loss will not denormalize")
+                normalizer = None
+
             physics_loss = PhysicsInformedLoss.from_config(trial_config, normalizer=normalizer)
 
         # Train
@@ -422,12 +434,13 @@ class HyperparameterOptimizer:
         print(f"  - All trials (sorted by {self.metric}): {trials_path}")
 
     @classmethod
-    def from_config(cls, config: Dict[str, Any]) -> 'HyperparameterOptimizer':
+    def from_config(cls, config: Dict[str, Any], normalizer_path: Optional[str] = None) -> 'HyperparameterOptimizer':
         """
         Create HyperparameterOptimizer from configuration.
 
         Args:
             config: Configuration dictionary
+            normalizer_path: Path to normalizer statistics file (optional)
 
         Returns:
             HyperparameterOptimizer instance
@@ -447,5 +460,6 @@ class HyperparameterOptimizer:
             param_space=param_space,
             n_trials=n_trials,
             metric=metric,
-            direction=direction
+            direction=direction,
+            normalizer_path=normalizer_path
         )
