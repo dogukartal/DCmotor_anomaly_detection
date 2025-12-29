@@ -106,7 +106,7 @@ class HyperparameterOptimizer:
         physics_loss = None
         if trial_config.get('physics_loss', {}).get('enabled', True):
             normalizer = Normalizer.from_config(trial_config)
-            physics_loss = PhysicsInformedLoss.from_config(trial_config, normalizer)
+            physics_loss = PhysicsInformedLoss.from_config(trial_config, normalizer=normalizer)
 
         # Train
         trainer = Trainer.from_config(
