@@ -90,6 +90,7 @@ def main():
     print(f"\nResults saved to {output_dir}")
     print(f"Best configuration: {output_dir / 'best_config.json'}")
     print(f"Study summary: {output_dir / 'study_summary.json'}")
+    print(f"All trials (sorted): {output_dir / 'all_trials.json'}")
 
     print("\nTo train with the best configuration, run:")
     print(f"  python scripts/train.py --config {output_dir / 'best_config.json'} --data {args.data}")
