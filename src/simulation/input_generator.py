@@ -124,6 +124,7 @@ class VoltageInputGenerator:
         amplitude = config.get('amplitude', 24.0)
         frequency = config.get('frequency_hz', 2.0)
         offset = config.get('offset', 0.0)
+        phase = config.get('phase', 0.0)
         return amplitude * scipy_signal.sawtooth(2 * np.pi * frequency * t + phase * np.pi) + offset
 
     def _generate_triangular(self, t: np.ndarray, config: Dict[str, Any]) -> np.ndarray:
@@ -131,6 +132,7 @@ class VoltageInputGenerator:
         amplitude = config.get('amplitude', 24.0)
         frequency = config.get('frequency_hz', 2.0)
         offset = config.get('offset', 0.0)
+        phase = config.get('phase', 0.0)
         return amplitude * scipy_signal.sawtooth(2 * np.pi * frequency * t + phase * np.pi, width=0.5) + offset
 
     def _generate_chirp(self, t: np.ndarray, config: Dict[str, Any]) -> np.ndarray:
