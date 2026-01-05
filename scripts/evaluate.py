@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.data.dataset import DatasetBuilder
 from src.visualization.plotter import Plotter
 from src.utils.config import ConfigManager
+from src.models.physics_loss import PhysicsInformedLoss
 
 
 def main():
@@ -40,7 +41,10 @@ def main():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
     print(f"Loading model from checkpoint: {checkpoint_path}")
-    model = keras.models.load_model(checkpoint_path, safe_mode=False)
+    model = keras.models.load_model(
+        checkpoint_path,
+        custom_objects={'PhysicsInformedLoss': PhysicsInformedLoss}
+    )
     print("Model loaded successfully")
 
     # Load data

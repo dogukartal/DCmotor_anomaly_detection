@@ -63,6 +63,7 @@ class HyperparameterOptimizer:
         from ..data.normalizer import Normalizer
         from ..training.trainer import Trainer
         from ..utils.experiment import ExperimentManager
+        from ..visualization.plotter import Plotter
 
         # Get input shape from validation dataset
         for x, y in val_ds.take(1):
@@ -93,15 +94,16 @@ class HyperparameterOptimizer:
             import json
             json.dump(trial.params, f, indent=2)
 
-        # Create minimal experiment paths (plots not needed for HPO)
+        # Create minimal experiment paths (plots now needed for training graphs)
         class TempExpPaths:
             def __init__(self, root):
                 self.root = str(root)
                 self.checkpoints = str(root / 'checkpoints')
                 self.logs = str(root / 'logs')
-                self.plots = str(root / 'plots')  # For compatibility, but not created
+                self.plots = str(root / 'plots')
                 Path(self.checkpoints).mkdir(parents=True, exist_ok=True)
                 Path(self.logs).mkdir(parents=True, exist_ok=True)
+                Path(self.plots).mkdir(parents=True, exist_ok=True)
 
         experiment_paths = TempExpPaths(temp_exp_dir)
 
@@ -129,6 +131,11 @@ class HyperparameterOptimizer:
         )
 
         history = trainer.train(train_ds, val_ds)
+
+        # Generate and save training plot for this trial
+        plotter = Plotter.from_config(trial_config)
+        fig = plotter.plot_training_history(history.history, title=f"Training History - Trial {trial.number}")
+        plotter.save_figure(fig, Path(experiment_paths.plots) / 'training_history')
 
         # Get metric value
         metric_value = min(history.history[self.metric])
@@ -427,6 +434,33 @@ class HyperparameterOptimizer:
         trials_path = directory / 'all_trials.json'
         with open(trials_path, 'w') as f:
             json.dump(all_trials_sorted, f, indent=2)
+
+        # Copy best trial's training history and plots
+        best_trial_num = self.study.best_trial.number
+        best_trial_dir = Path('experiments') / 'hpo_temp' / f'trial_{best_trial_num}'
+
+        if best_trial_dir.exists():
+            # Copy training history JSON
+            history_src = best_trial_dir / 'training_history.json'
+            if history_src.exists():
+                import shutil
+                history_dst = directory / 'training_history.json'
+                shutil.copy(history_src, history_dst)
+                print(f"  - Training history (best trial): {history_dst}")
+
+            # Copy training plots
+            plots_src = best_trial_dir / 'plots'
+            if plots_src.exists() and plots_src.is_dir():
+                import shutil
+                plots_dst = directory / 'plots'
+                plots_dst.mkdir(exist_ok=True)
+
+                # Copy all plot files from best trial
+                for plot_file in plots_src.glob('*'):
+                    if plot_file.is_file():
+                        shutil.copy(plot_file, plots_dst / plot_file.name)
+
+                print(f"  - Training plots (best trial): {plots_dst}")
 
         print(f"Study results saved to {directory}")
         print(f"  - Best config: {config_path}")
