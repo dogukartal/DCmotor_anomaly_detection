@@ -12,7 +12,7 @@
   "data_processing": {
     "target_sampling_rate_hz": 500,
     "derived_features": {
-      "current": ["rms", "peak_to_peak","max", "min"],
+      "current": ["rms", "peak_to_peak","max", "min"]
     },
     "input_variables": ["current", "angular_velocity", "voltage"],
     "include_voltage_as_input": true,
