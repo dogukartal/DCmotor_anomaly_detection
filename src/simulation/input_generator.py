@@ -117,21 +117,21 @@ class VoltageInputGenerator:
         frequency = config.get('frequency_hz', 5.0)
         offset = config.get('offset', 0.0)
         phase = config.get('phase', 0.0)
-        return amplitude * np.sin(2 * np.pi * frequency * t + phase) + offset
+        return amplitude * np.sin(2 * np.pi * frequency * t + phase * np.pi) + offset
 
     def _generate_sawtooth(self, t: np.ndarray, config: Dict[str, Any]) -> np.ndarray:
         """Generate sawtooth signal."""
         amplitude = config.get('amplitude', 24.0)
         frequency = config.get('frequency_hz', 2.0)
         offset = config.get('offset', 0.0)
-        return amplitude * scipy_signal.sawtooth(2 * np.pi * frequency * t) + offset
+        return amplitude * scipy_signal.sawtooth(2 * np.pi * frequency * t + phase * np.pi) + offset
 
     def _generate_triangular(self, t: np.ndarray, config: Dict[str, Any]) -> np.ndarray:
         """Generate triangular signal."""
         amplitude = config.get('amplitude', 24.0)
         frequency = config.get('frequency_hz', 2.0)
         offset = config.get('offset', 0.0)
-        return amplitude * scipy_signal.sawtooth(2 * np.pi * frequency * t, width=0.5) + offset
+        return amplitude * scipy_signal.sawtooth(2 * np.pi * frequency * t + phase * np.pi, width=0.5) + offset
 
     def _generate_chirp(self, t: np.ndarray, config: Dict[str, Any]) -> np.ndarray:
         """Generate chirp signal (frequency sweep)."""
@@ -140,7 +140,7 @@ class VoltageInputGenerator:
         end_freq = config.get('end_frequency_hz', 20.0)
         offset = config.get('offset', 0.0)
         method = config.get('method', 'linear')
-        return amplitude * scipy_signal.chirp(t, start_freq, t[-1], end_freq, method=method) + offset
+        return amplitude * scipy_signal.chirp(t, start_freq, t[-1], end_freq, method=method, phi=90) + offset
 
     def save(self, filepath: str) -> None:
         """
