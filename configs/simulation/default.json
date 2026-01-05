@@ -6,56 +6,47 @@
     "sampling_rate_hz": 20000,
     "save_format": "npy",
     "signals": [
-      {
-        "type": "step",
-        "duration_sec": 0.5,
-        "amplitude": 12.0
-      },
-      {
-        "type": "ramp",
-        "duration_sec": 0.3,
-        "start_amplitude": 0.0,
-        "end_amplitude": 24.0
-      },
-      {
-        "type": "sinusoidal",
-        "duration_sec": 1.0,
-        "amplitude": 12.0,
-        "frequency_hz": 5.0,
-        "offset": 12.0
-      },
-      {
-        "type": "sawtooth",
-        "duration_sec": 0.5,
-        "amplitude": 24.0,
-        "frequency_hz": 2.0
-      },
-      {
-        "type": "triangular",
-        "duration_sec": 0.5,
-        "amplitude": 24.0,
-        "frequency_hz": 2.0
-      },
-      {
-        "type": "chirp",
-        "duration_sec": 1.0,
-        "amplitude": 12.0,
-        "start_frequency_hz": 1.0,
-        "end_frequency_hz": 20.0,
-        "offset": 12.0
-      }
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "step", "duration_sec": 0.2, "amplitude": 6.0},
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "step", "duration_sec": 0.2, "amplitude": -6.0},
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "step", "duration_sec": 0.2, "amplitude": 12.0},
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "step", "duration_sec": 0.2, "amplitude": -12.0},
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "step", "duration_sec": 0.2, "amplitude": 18.0},
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "step", "duration_sec": 0.2, "amplitude": -18.0},
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "step", "duration_sec": 0.2, "amplitude": 24.0},
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "step", "duration_sec": 0.2, "amplitude": -24.0},
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "triangular", "duration_sec": 0.5, "amplitude": 12.0, "frequency_hz": 8.0},
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "triangular", "duration_sec": 0.5, "amplitude": 12.0, "frequency_hz": 16.0},
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "triangular", "duration_sec": 0.5, "amplitude": 24.0, "frequency_hz": 8.0},
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "triangular", "duration_sec": 0.5, "amplitude": 24.0, "frequency_hz": 16.0},
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "chirp", "duration_sec": 2.0, "amplitude": 12.0, "start_frequency_hz": 0.1, "end_frequency_hz": 25.0, "offset": 0.0}
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
+      {"type": "chirp", "duration_sec": 2.0, "amplitude": 24.0, "start_frequency_hz": 0.1, "end_frequency_hz": 25.0, "offset": 0.0}
+      {"type": "step", "duration_sec": 0.1, "amplitude": 0.0},
     ]
   },
 
   "simulation": {
     "sampling_rate_hz": 20000,
     "motor_params": {
-      "R": 1.0,
-      "L": 0.5,
-      "Kt": 0.01,
-      "Ke": 0.01,
-      "J": 0.01,
-      "B": 0.1
+      "R": 4.55,
+      "L": 0.00017,
+      "Kt": 0.0179,
+      "Ke": 0.0179,
+      "J": 2.4e-07,
+      "B": 4.73e-07
     },
     "initial_conditions": {
       "current": 0.0,
