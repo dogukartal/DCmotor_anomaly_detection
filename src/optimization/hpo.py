@@ -6,6 +6,8 @@ import json
 from typing import Dict, Any, Optional
 from pathlib import Path
 import tensorflow as tf
+import gc
+import matplotlib.pyplot as plt
 from ..utils.config import ConfigManager
 
 
@@ -19,7 +21,8 @@ class HyperparameterOptimizer:
                  metric: str = 'val_loss',
                  direction: str = 'minimize',
                  study_name: Optional[str] = None,
-                 normalizer_path: Optional[str] = None):
+                 normalizer_path: Optional[str] = None,
+                 cleanup_trials: bool = True):
         """
         Initialize HyperparameterOptimizer.
 
@@ -31,6 +34,7 @@ class HyperparameterOptimizer:
             direction: Optimization direction ('minimize' or 'maximize')
             study_name: Name for the optuna study
             normalizer_path: Path to normalizer statistics file (optional)
+            cleanup_trials: Whether to clean up non-best trial directories after optimization (default: True)
         """
         self.base_config = base_config
         self.param_space = param_space
@@ -41,6 +45,7 @@ class HyperparameterOptimizer:
         self.study = None
         self.best_config = None
         self.normalizer_path = normalizer_path
+        self.cleanup_trials = cleanup_trials
 
     def objective(self, trial: Trial, train_ds: tf.data.Dataset, val_ds: tf.data.Dataset) -> float:
         """
@@ -137,8 +142,30 @@ class HyperparameterOptimizer:
         fig = plotter.plot_training_history(history.history, title=f"Training History - Trial {trial.number}")
         plotter.save_figure(fig, Path(experiment_paths.plots) / 'training_history')
 
+        # Close matplotlib figure to prevent memory leak
+        plt.close(fig)
+
         # Get metric value
         metric_value = min(history.history[self.metric])
+
+        # Clean up memory after trial to prevent RAM accumulation
+        print(f"  Trial {trial.number}: Cleaning up memory...")
+
+        # Delete large objects
+        del autoencoder
+        del trainer
+        del history
+        del plotter
+        if physics_loss is not None:
+            del physics_loss
+        if normalizer is not None:
+            del normalizer
+
+        # Clear TensorFlow/Keras backend session to release GPU/CPU memory
+        tf.keras.backend.clear_session()
+
+        # Force garbage collection to free memory immediately
+        gc.collect()
 
         return metric_value
 
@@ -466,6 +493,40 @@ class HyperparameterOptimizer:
         print(f"  - Best config: {config_path}")
         print(f"  - Study summary: {summary_path}")
         print(f"  - All trials (sorted by {self.metric}): {trials_path}")
+
+        # Clean up temporary trial directories if enabled (keeps only best trial)
+        if self.cleanup_trials:
+            self._cleanup_trial_directories(best_trial_num)
+
+    def _cleanup_trial_directories(self, best_trial_num: int) -> None:
+        """
+        Clean up temporary trial directories, keeping only the best trial.
+
+        Args:
+            best_trial_num: Trial number of the best trial to keep
+        """
+        import shutil
+
+        temp_dir = Path('experiments') / 'hpo_temp'
+        if not temp_dir.exists():
+            return
+
+        cleaned_count = 0
+        for trial_dir in temp_dir.iterdir():
+            if trial_dir.is_dir() and trial_dir.name.startswith('trial_'):
+                # Extract trial number from directory name
+                try:
+                    trial_num = int(trial_dir.name.split('_')[1])
+                    # Keep only the best trial directory
+                    if trial_num != best_trial_num:
+                        shutil.rmtree(trial_dir)
+                        cleaned_count += 1
+                except (ValueError, IndexError):
+                    # Skip directories that don't match expected format
+                    continue
+
+        if cleaned_count > 0:
+            print(f"  - Cleaned up {cleaned_count} temporary trial directories (kept trial_{best_trial_num})")
 
     @classmethod
     def from_config(cls, config: Dict[str, Any], normalizer_path: Optional[str] = None) -> 'HyperparameterOptimizer':
