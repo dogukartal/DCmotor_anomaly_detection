@@ -12,13 +12,12 @@
   "data_processing": {
     "target_sampling_rate_hz": 500,
     "derived_features": {
-      "current": ["rms", "peak_to_peak", "variance"],
-      "angular_velocity": ["rms", "peak_to_peak", "variance"]
+      "current": ["rms", "peak_to_peak","max", "min"],
     },
     "input_variables": ["current", "angular_velocity", "voltage"],
     "include_voltage_as_input": true,
-    "window_size": 64,
-    "window_stride": 32,
+    "window_size": 128,
+    "window_stride": 16,
     "train_val_test_split": [0.7, 0.15, 0.15],
     "shuffle_seed": 42
   },
@@ -30,11 +29,11 @@
   },
 
   "model": {
-    "encoder_units": [64, 32],
-    "decoder_units": [32, 64],
+    "encoder_units": [364, 256, 128],
+    "decoder_units": [128, 256, 364],
     "bottleneck": {
       "enabled": true,
-      "units": 16,
+      "units": 64,
       "activation": "relu"
     },
     "recurrent_dropout": 0.0,
@@ -45,17 +44,17 @@
 
   "physics_loss": {
     "enabled": true,
-    "start_epoch": 10,
+    "start_epoch": 700,
     "weight": 0.1,
     "motor_params": "from_simulation"
   },
 
   "training": {
-    "epochs": 100,
+    "epochs": 2000,
     "batch_size": 32,
     "optimizer": {
       "type": "adam",
-      "learning_rate": 0.001
+      "learning_rate": 0.002
     },
     "loss": "mse",
     "early_stopping": {
