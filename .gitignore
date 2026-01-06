@@ -34,6 +34,9 @@ env/
 
 # Data and experiments
 data/
+!realworld_data_processing/data/
+realworld_data_processing/data/processed/*
+!realworld_data_processing/data/processed/.gitkeep
 /experiments/
 
 # Model checkpoints
