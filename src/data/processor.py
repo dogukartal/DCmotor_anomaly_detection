@@ -68,18 +68,23 @@ class DataProcessor:
             # Get raw variable
             raw_var = raw_data[var_name]
 
-            # Downsample base variable
-            downsampled = self._downsample(raw_var)
-            processed_dict[var_name] = downsampled
-            feature_names.append(var_name)
+            # Check if this variable has derived features
+            has_derived_features = var_name in self.derived_features and len(self.derived_features[var_name]) > 0
 
-            # Derive features if specified
-            if var_name in self.derived_features:
+            if has_derived_features:
+                # For variables with derived features (e.g., high-freq current),
+                # ONLY include derived features, NOT the base downsampled value
                 for feature_type in self.derived_features[var_name]:
                     feature_values = self._derive_feature(raw_var, feature_type)
                     feature_name = f"{var_name}_{feature_type}"
                     processed_dict[feature_name] = feature_values
                     feature_names.append(feature_name)
+            else:
+                # For variables without derived features (e.g., low-freq voltage, velocity),
+                # include the downsampled base variable
+                downsampled = self._downsample(raw_var)
+                processed_dict[var_name] = downsampled
+                feature_names.append(var_name)
 
         # Stack into array: (n_samples, n_features)
         data_arrays = [processed_dict[name] for name in feature_names]
@@ -280,10 +285,15 @@ class DataProcessor:
         feature_names = []
 
         for var_name in self.input_variables:
-            feature_names.append(var_name)
+            # Check if this variable has derived features
+            has_derived_features = var_name in self.derived_features and len(self.derived_features[var_name]) > 0
 
-            if var_name in self.derived_features:
+            if has_derived_features:
+                # Only include derived features
                 for feature_type in self.derived_features[var_name]:
                     feature_names.append(f"{var_name}_{feature_type}")
+            else:
+                # Include base variable
+                feature_names.append(var_name)
 
         return feature_names
