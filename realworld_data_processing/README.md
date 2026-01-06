@@ -10,6 +10,57 @@ The system handles two types of data files collected at different sampling rates
 
 The processor synchronizes these data sources, extracts features, creates sliding windows, normalizes, and outputs data ready for inference.
 
+## ⚠️ CRITICAL: Feature Ordering for Inference
+
+**Your real-world data MUST have the same feature order as your training data!**
+
+When you train a model on simulation data and want to run inference on real-world data, the features must be in the **exact same order**. Otherwise, the model will receive features in wrong positions and produce garbage results.
+
+### Default Configuration
+
+The default configuration matches the simulation training data:
+
+**Feature Order:**
+1. current_rms
+2. current_peak_to_peak
+3. current_max
+4. current_min
+5. velocity (corresponds to angular_velocity in simulation)
+6. voltage
+
+**This is achieved by:**
+```json
+{
+  "processing": {
+    "input_variables": ["current", "velocity", "voltage"],
+    "derived_features": {
+      "current": ["rms", "peak_to_peak", "max", "min"]
+    }
+  }
+}
+```
+
+### How to Match Your Training Data
+
+1. **Check your simulation/training config** (`configs/model/default.json`):
+   ```json
+   "input_variables": ["current", "angular_velocity", "voltage"]
+   ```
+
+2. **Set real-world config to match** (using "velocity" instead of "angular_velocity"):
+   ```json
+   "input_variables": ["current", "velocity", "voltage"]
+   ```
+
+3. **Keep derived_features identical:**
+   ```json
+   "derived_features": {
+     "current": ["rms", "peak_to_peak", "max", "min"]
+   }
+   ```
+
+**Note:** "velocity" in real-world data corresponds to "angular_velocity" in simulation. They're the same physical quantity, just named differently based on the data source.
+
 ## Directory Structure
 
 ```
@@ -46,13 +97,21 @@ Edit `config.json` to match your data collection setup:
 
 **Important Configuration Points:**
 
-1. **Voltage Column**: Set `"voltage"` to the column name where you store the input voltage
+1. **⚠️ Feature Order** (MOST IMPORTANT): Must match training data!
+   ```json
+   "input_variables": ["current", "velocity", "voltage"]
+   ```
+   - Controls the order features appear in output
+   - Must match simulation config (use "velocity" for "angular_velocity")
+   - See "Feature Ordering" section above
+
+2. **Voltage Column**: Set `"voltage"` to the column name where you store the input voltage
    - Example: If voltage is in `CASTemperature`, use `"voltage": "CASTemperature"`
 
-2. **Velocity Column**: Set `"velocity"` to your velocity column name
+3. **Velocity Column**: Set `"velocity"` to your velocity column name
    - Example: `"velocity": "CASFinVelocityIE"`
 
-3. **Sampling Rates**: Update if your rates differ from defaults
+4. **Sampling Rates**: Update if your rates differ from defaults
    ```json
    "current_data": {
      "sampling_rate_hz": 10000  // Your current sampling rate
@@ -62,13 +121,15 @@ Edit `config.json` to match your data collection setup:
    }
    ```
 
-4. **Derived Features**: Configure what features to extract from current
+5. **Derived Features**: Configure what features to extract from current
    ```json
    "derived_features": {
      "current": ["rms", "peak_to_peak", "max", "min"]
    }
    ```
    Available: `rms`, `peak_to_peak`, `variance`, `mean`, `max`, `min`, `slope`, `zero_crossing_rate`
+
+   ⚠️ **Order matters!** Feature extraction order must match training data.
 
 ### 2. Prepare Your Data Files
 
@@ -174,10 +235,10 @@ After processing, you'll find in your output directory:
   },
   "processing": {
     "target_sampling_rate_hz": 500,      // Target rate after downsampling
+    "input_variables": ["current", "velocity", "voltage"],  // ⚠️ Order matters!
     "derived_features": {
       "current": ["rms", "peak_to_peak", "max", "min"]  // Features to compute
     },
-    "base_features": ["current", "velocity", "voltage"],  // Raw features to include
     "window_size": 128,                  // Sliding window size
     "window_stride": 16,                 // Sliding window stride
     "normalization": {
@@ -197,23 +258,27 @@ After processing, you'll find in your output directory:
 
 To include additional communication variables:
 
-1. Add them to `base_features`:
+1. Add them to `input_variables` (⚠️ **order matters**):
    ```json
-   "base_features": ["current", "velocity", "voltage", "position", "temperature"]
+   "input_variables": ["current", "velocity", "voltage", "position"]
    ```
 
-2. Add column mapping:
+2. Add column mapping for the new variables:
    ```json
    "column_mapping": {
      "time": "Test Time",
      "voltage": "CASTemperature",
      "velocity": "CASFinVelocityIE",
-     "position": "CASFinPositionIE",
-     "temperature": "CASBusVoltage"
+     "position": "CASFinPositionIE"
    }
    ```
 
-3. Update the communication data loader in your script if needed
+3. Update your training model's config to match the same order:
+   ```json
+   "input_variables": ["current", "angular_velocity", "voltage", "position"]
+   ```
+
+**Important:** The order in `input_variables` determines feature order in output. Make sure it matches your training configuration!
 
 ### Normalization Methods
 

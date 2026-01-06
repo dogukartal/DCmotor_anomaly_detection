@@ -264,21 +264,28 @@ class RealWorldDataProcessor:
         window_stride = self.config['processing']['window_stride']
 
         # Get feature columns (exclude time)
-        # base_features should only contain low-frequency variables from communication data
-        # (e.g., voltage, velocity) - NOT high-frequency current
-        base_features = self.config['processing']['base_features']
-        derived_features = self.config['processing']['derived_features'].get('current', [])
+        # Process variables in the same order as simulation processor
+        # This ensures feature order matches between training and inference
+        input_variables = self.config['processing']['input_variables']
+        derived_features_config = self.config['processing']['derived_features']
 
-        # Build feature list in order: base features (low-freq) + derived features (from high-freq current)
+        # Build feature list following input_variables order
+        # This matches the logic in src/data/processor.py
         feature_names = []
 
-        # Add base low-frequency features
-        for feature in base_features:
-            feature_names.append(feature)
+        for var_name in input_variables:
+            # Check if this variable has derived features
+            has_derived_features = var_name in derived_features_config and len(derived_features_config[var_name]) > 0
 
-        # Add derived current features
-        for feature_type in derived_features:
-            feature_names.append(f'current_{feature_type}')
+            if has_derived_features:
+                # For variables with derived features (e.g., high-freq current),
+                # ONLY include derived features, NOT the base value
+                for feature_type in derived_features_config[var_name]:
+                    feature_names.append(f"{var_name}_{feature_type}")
+            else:
+                # For variables without derived features (e.g., low-freq voltage, velocity),
+                # include the base variable
+                feature_names.append(var_name)
 
         # Extract feature data
         feature_data = []
