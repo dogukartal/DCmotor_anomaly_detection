@@ -1,0 +1,31 @@
+# Processed data files
+data/processed/*
+!data/processed/.gitkeep
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# User data - keep the structure but ignore large data files
+# Users should place their own data in data/raw/
+# but we keep example files in git

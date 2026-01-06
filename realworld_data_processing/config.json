@@ -1,0 +1,49 @@
+{
+  "data_sources": {
+    "current_data": {
+      "description": "High-frequency current measurements",
+      "sampling_rate_hz": 10000,
+      "columns": {
+        "time": 0,
+        "current": 1
+      },
+      "delimiter": "\t"
+    },
+    "communication_data": {
+      "description": "Communication variables from LabView",
+      "sampling_rate_hz": 500,
+      "delimiter": "\t",
+      "header_row": 0,
+      "data_start_row": 1,
+      "column_mapping": {
+        "time": "Test Time",
+        "voltage": "CASTemperature",
+        "velocity": "CASFinVelocityIE"
+      }
+    }
+  },
+  "processing": {
+    "target_sampling_rate_hz": 500,
+    "derived_features": {
+      "current": ["rms", "peak_to_peak", "max", "min"]
+    },
+    "base_features": ["current", "velocity", "voltage"],
+    "window_size": 128,
+    "window_stride": 16,
+    "normalization": {
+      "method": "minmax",
+      "feature_range": [-1, 1]
+    }
+  },
+  "output": {
+    "format": "npz",
+    "save_normalizer_stats": true,
+    "save_metadata": true
+  },
+  "notes": {
+    "voltage_column": "Change 'voltage' in column_mapping to the actual column name containing voltage input",
+    "velocity_column": "Change 'velocity' in column_mapping to match your velocity column name",
+    "derived_features": "Available: rms, peak_to_peak, variance, mean, max, min, slope, zero_crossing_rate",
+    "base_features": "These are the raw features extracted from communication data"
+  }
+}
