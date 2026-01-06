@@ -27,7 +27,7 @@
     "derived_features": {
       "current": ["rms", "peak_to_peak", "max", "min"]
     },
-    "base_features": ["current", "velocity", "voltage"],
+    "base_features": ["velocity", "voltage"],
     "window_size": 128,
     "window_stride": 16,
     "normalization": {
@@ -43,7 +43,7 @@
   "notes": {
     "voltage_column": "Change 'voltage' in column_mapping to the actual column name containing voltage input",
     "velocity_column": "Change 'velocity' in column_mapping to match your velocity column name",
-    "derived_features": "Available: rms, peak_to_peak, variance, mean, max, min, slope, zero_crossing_rate",
-    "base_features": "These are the raw features extracted from communication data"
+    "derived_features": "Features to extract from high-frequency current (10 kHz). Available: rms, peak_to_peak, variance, mean, max, min, slope, zero_crossing_rate. If empty, no current features will appear in output.",
+    "base_features": "Low-frequency variables from communication data (500 Hz). Do NOT include 'current' here - current is high-frequency and must appear only through derived_features."
   }
 }

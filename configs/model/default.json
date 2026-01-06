@@ -15,11 +15,14 @@
       "current": ["rms", "peak_to_peak","max", "min"]
     },
     "input_variables": ["current", "angular_velocity", "voltage"],
-    "include_voltage_as_input": true,
     "window_size": 128,
     "window_stride": 16,
     "train_val_test_split": [0.7, 0.15, 0.15],
-    "shuffle_seed": 42
+    "shuffle_seed": 42,
+    "_comments": {
+      "input_variables": "Variables to process. If a variable has derived_features, only those features will appear (not the raw downsampled value). If no derived_features, the downsampled value will appear.",
+      "derived_features": "Features to extract from high-frequency variables during downsampling. If empty for current, no current-related features will exist."
+    }
   },
 
   "normalization": {

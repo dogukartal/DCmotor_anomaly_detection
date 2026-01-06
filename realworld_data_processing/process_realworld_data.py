@@ -146,26 +146,29 @@ class RealWorldDataProcessor:
         time_windows = times.reshape(n_windows, downsample_factor)
         current_windows = currents.reshape(n_windows, downsample_factor)
 
-        # Calculate base downsampled values (mean of each window)
+        # Calculate downsampled times
         downsampled_times = time_windows.mean(axis=1)
-        downsampled_currents = current_windows.mean(axis=1)
 
-        # Calculate derived features
+        # Get derived features configuration
         derived_features = self.config['processing']['derived_features'].get('current', [])
 
         result = {
-            'time': downsampled_times,
-            'current': downsampled_currents
+            'time': downsampled_times
         }
 
-        print(f"  Computing derived features: {derived_features}")
-
-        for feature_type in derived_features:
-            feature_values = self._compute_feature(current_windows, feature_type)
-            result[f'current_{feature_type}'] = feature_values
+        # Only compute derived features if specified
+        # Current is high-frequency and should ONLY appear through derived features
+        if len(derived_features) > 0:
+            print(f"  Computing derived features: {derived_features}")
+            for feature_type in derived_features:
+                feature_values = self._compute_feature(current_windows, feature_type)
+                result[f'current_{feature_type}'] = feature_values
+        else:
+            print("  No derived features specified for current - current will not appear in output")
 
         result_df = pd.DataFrame(result)
-        print(f"  Result: {len(result_df)} samples with {len(result_df.columns)-1} features")
+        n_features = len(result_df.columns) - 1  # Exclude 'time' column
+        print(f"  Result: {len(result_df)} samples with {n_features} current features")
 
         return result_df
 
@@ -261,11 +264,19 @@ class RealWorldDataProcessor:
         window_stride = self.config['processing']['window_stride']
 
         # Get feature columns (exclude time)
+        # base_features should only contain low-frequency variables from communication data
+        # (e.g., voltage, velocity) - NOT high-frequency current
         base_features = self.config['processing']['base_features']
         derived_features = self.config['processing']['derived_features'].get('current', [])
 
-        # Build feature list in order: base features + derived features
-        feature_names = base_features.copy()
+        # Build feature list in order: base features (low-freq) + derived features (from high-freq current)
+        feature_names = []
+
+        # Add base low-frequency features
+        for feature in base_features:
+            feature_names.append(feature)
+
+        # Add derived current features
         for feature_type in derived_features:
             feature_names.append(f'current_{feature_type}')
 
