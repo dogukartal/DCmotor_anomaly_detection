@@ -2,6 +2,7 @@
 
 import optuna
 from optuna.trial import Trial
+from optuna.samplers import TPESampler
 import json
 from typing import Dict, Any, Optional
 from pathlib import Path
@@ -189,8 +190,13 @@ class HyperparameterOptimizer:
         for param_path, param_def in self.param_space.items():
             param_type = param_def['type']
 
+            # Handle layer sequence (special type for dynamic depth with gain constraints)
+            if param_type == 'layer_sequence':
+                value = self._sample_layer_sequence(
+                    trial, param_path, param_def, sampled_values
+                )
             # Handle parameter constraints
-            if 'constraint' in param_def:
+            elif 'constraint' in param_def:
                 value = self._sample_with_constraint(
                     trial, param_path, param_def, sampled_values
                 )
@@ -225,6 +231,102 @@ class HyperparameterOptimizer:
             ConfigManager.set_nested(trial_config, param_path, value)
 
         return trial_config
+
+    def _sample_layer_sequence(
+        self,
+        trial: Trial,
+        param_path: str,
+        param_def: Dict[str, Any],
+        sampled_values: Dict[str, Any]
+    ) -> list:
+        """
+        Sample layer sequence with dynamic depth and gain constraints.
+
+        For encoder layers: each layer (after first) must be <= previous_layer * gain
+        For decoder layers: symmetric to encoder (reverse order)
+
+        Args:
+            trial: Optuna trial
+            param_path: Parameter path (e.g., 'model.encoder_units')
+            param_def: Parameter definition with layer_sequence type
+            sampled_values: Previously sampled parameter values
+
+        Returns:
+            List of layer sizes
+        """
+        # Get depth parameter (number of layers)
+        depth_param = param_def.get('depth_param')
+        if depth_param and depth_param in sampled_values:
+            depth = sampled_values[depth_param]
+        else:
+            # Sample depth if not already sampled
+            depth_choices = param_def.get('depth_choices', [2, 3])
+            depth = trial.suggest_categorical(f"{param_path}_depth", depth_choices)
+
+        # Get layer size constraints
+        layer_min = param_def['low']
+        layer_max = param_def['high']
+        layer_step = param_def.get('step', 1)
+        gain = param_def.get('gain', 1.0)  # Max ratio for next layer
+
+        # Determine if this is encoder or decoder
+        is_encoder = 'encoder' in param_path.lower()
+
+        if is_encoder:
+            # Sample encoder layers with decreasing constraint
+            layers = []
+            for i in range(depth):
+                if i == 0:
+                    # First layer: full range
+                    layer_size = trial.suggest_int(
+                        f"{param_path}_layer_{i}",
+                        layer_min,
+                        layer_max,
+                        step=layer_step
+                    )
+                else:
+                    # Subsequent layers: constrained by previous layer * gain
+                    prev_layer = layers[i - 1]
+                    constrained_max_raw = int(prev_layer * gain)
+
+                    # Round down to nearest valid step
+                    constrained_max = (constrained_max_raw // layer_step) * layer_step
+
+                    # Ensure constrained_max is within valid range
+                    constrained_max = min(constrained_max, layer_max)
+
+                    # Check if we have a valid range that satisfies the constraint
+                    if constrained_max < layer_min or constrained_max == 0:
+                        # Constraint cannot be satisfied with current minimum step
+                        # Use the raw constrained value (before rounding)
+                        if constrained_max_raw > 0:
+                            layer_size = constrained_max_raw
+                        else:
+                            # Shouldn't happen with valid gain, but use minimum step as fallback
+                            layer_size = layer_step
+                    else:
+                        layer_size = trial.suggest_int(
+                            f"{param_path}_layer_{i}",
+                            layer_min,
+                            constrained_max,
+                            step=layer_step
+                        )
+
+                layers.append(layer_size)
+        else:
+            # For decoder, get the encoder layers and reverse them
+            encoder_param = param_def.get('mirror_from', 'model.encoder_units')
+            if encoder_param not in sampled_values:
+                raise ValueError(
+                    f"Decoder layer sequence requires '{encoder_param}' to be sampled first. "
+                    f"Ensure '{encoder_param}' appears before '{param_path}' in parameter space."
+                )
+
+            # Mirror encoder layers (reverse order for symmetry)
+            encoder_layers = sampled_values[encoder_param]
+            layers = list(reversed(encoder_layers))
+
+        return layers
 
     def _sample_with_constraint(
         self,
@@ -378,10 +480,13 @@ class HyperparameterOptimizer:
         print(f"Starting hyperparameter optimization...")
         print(f"Number of trials: {self.n_trials}")
         print(f"Optimizing metric: {self.metric} ({self.direction})")
+        print(f"Sampler: TPE (Tree-structured Parzen Estimator)")
 
+        # Explicitly use TPE sampler for optimization
         self.study = optuna.create_study(
             study_name=self.study_name,
-            direction=self.direction
+            direction=self.direction,
+            sampler=TPESampler()
         )
 
         # Create objective function with datasets
