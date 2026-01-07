@@ -7,8 +7,9 @@ This document describes the advanced hyperparameter optimization features for la
 The HPO system now supports:
 1. **Dynamic network depth** - Sample the number of layers (2 or 3)
 2. **Integer-based layer sizes with gain constraints** - Ensure each layer follows architectural constraints
-3. **Early stopping patience** - Optimize early stopping to prevent overfitting
-4. **Explicit TPE sampler** - Confirmed use of Tree-structured Parzen Estimator
+3. **Early stopping patience with intelligent constraints** - Optimize early stopping relative to LR scheduler patience
+4. **Advanced constraint types** - `max_from_last`, `max_ratio_of`, and `min_ratio_of` for parameter dependencies
+5. **Explicit TPE sampler** - Confirmed use of Tree-structured Parzen Estimator
 
 ## Features
 
@@ -77,24 +78,39 @@ Decoder layers automatically mirror the encoder in reverse order for architectur
 - If encoder: `[96, 32, 16]`
 - Then decoder: `[16, 32, 96]`
 
-### 3. Early Stopping Patience
+### 3. Early Stopping Patience with Constraint
 
-Early stopping patience can now be optimized as a hyperparameter.
+Early stopping patience can now be optimized as a hyperparameter with intelligent constraints relative to the learning rate scheduler patience.
 
 **Configuration Example:**
 ```json
 {
+  "training.lr_scheduler.patience": {
+    "type": "int",
+    "low": 3,
+    "high": 15,
+    "step": 1
+  },
   "training.early_stopping.patience": {
     "type": "int",
     "low": 10,
     "high": 30,
     "step": 5,
-    "comment": "Early stopping patience"
+    "constraint": {
+      "type": "min_ratio_of",
+      "parameter": "training.lr_scheduler.patience",
+      "ratio": 2.0
+    }
   }
 }
 ```
 
-This helps prevent overfitting by finding the optimal patience value for your dataset.
+**Why this constraint matters:**
+- The LR scheduler should reduce the learning rate multiple times before early stopping
+- Setting `early_stopping.patience >= lr_scheduler.patience * 2` ensures at least 2 LR reductions
+- Example: if lr_scheduler.patience = 5, early_stopping.patience will be >= 10
+
+This helps prevent overfitting while allowing the optimizer to explore different learning rates.
 
 ### 4. TPE Sampler
 
@@ -160,9 +176,61 @@ This will verify that:
 - Depth is sampled correctly from choices
 - Layer sizes respect min/max/step constraints
 
+## Constraint Types
+
+The HPO system supports multiple constraint types for parameter dependencies:
+
+### 1. `max_from_last`
+Constrains a parameter to be ≤ the last value from a list parameter.
+
+**Example:** Bottleneck units ≤ last encoder layer
+```json
+{
+  "model.bottleneck.units": {
+    "constraint": {
+      "type": "max_from_last",
+      "parameter": "model.encoder_units",
+      "multiplier": 1.0
+    }
+  }
+}
+```
+
+### 2. `max_ratio_of`
+Constrains a parameter to be ≤ reference_parameter × ratio.
+
+**Example:** Physics loss start epoch ≤ 50% of total epochs
+```json
+{
+  "physics_loss.start_epoch": {
+    "constraint": {
+      "type": "max_ratio_of",
+      "parameter": "training.epochs",
+      "ratio": 0.5
+    }
+  }
+}
+```
+
+### 3. `min_ratio_of`
+Constrains a parameter to be ≥ reference_parameter × ratio.
+
+**Example:** Early stopping patience ≥ 2 × LR scheduler patience
+```json
+{
+  "training.early_stopping.patience": {
+    "constraint": {
+      "type": "min_ratio_of",
+      "parameter": "training.lr_scheduler.patience",
+      "ratio": 2.0
+    }
+  }
+}
+```
+
 ## Implementation Details
 
-### Constraint Enforcement
+### Layer Sequence Constraint Enforcement
 
 The layer sequence sampler enforces constraints by:
 

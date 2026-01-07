@@ -66,7 +66,12 @@
         "low": 10,
         "high": 30,
         "step": 5,
-        "comment": "Early stopping patience to prevent overfitting"
+        "constraint": {
+          "type": "min_ratio_of",
+          "parameter": "training.lr_scheduler.patience",
+          "ratio": 2.0
+        },
+        "comment": "Early stopping patience (must be >= lr_scheduler.patience * 2 to allow LR reductions)"
       },
       "physics_loss.weight": {
         "type": "uniform",
