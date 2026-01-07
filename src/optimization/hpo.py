@@ -254,6 +254,22 @@ class HyperparameterOptimizer:
         Returns:
             List of layer sizes
         """
+        # Check if this is a mirrored layer sequence (e.g., decoder)
+        if 'mirror_from' in param_def:
+            # For decoder, get the encoder layers and reverse them
+            encoder_param = param_def.get('mirror_from', 'model.encoder_units')
+            if encoder_param not in sampled_values:
+                raise ValueError(
+                    f"Decoder layer sequence requires '{encoder_param}' to be sampled first. "
+                    f"Ensure '{encoder_param}' appears before '{param_path}' in parameter space."
+                )
+
+            # Mirror encoder layers (reverse order for symmetry)
+            encoder_layers = sampled_values[encoder_param]
+            layers = list(reversed(encoder_layers))
+            return layers
+
+        # For encoder layers: sample with constraints
         # Get depth parameter (number of layers)
         depth_param = param_def.get('depth_param')
         if depth_param and depth_param in sampled_values:
@@ -269,62 +285,46 @@ class HyperparameterOptimizer:
         layer_step = param_def.get('step', 1)
         gain = param_def.get('gain', 1.0)  # Max ratio for next layer
 
-        # Determine if this is encoder or decoder
-        is_encoder = 'encoder' in param_path.lower()
+        # Sample encoder layers with decreasing constraint
+        layers = []
+        for i in range(depth):
+            if i == 0:
+                # First layer: full range
+                layer_size = trial.suggest_int(
+                    f"{param_path}_layer_{i}",
+                    layer_min,
+                    layer_max,
+                    step=layer_step
+                )
+            else:
+                # Subsequent layers: constrained by previous layer * gain
+                prev_layer = layers[i - 1]
+                constrained_max_raw = int(prev_layer * gain)
 
-        if is_encoder:
-            # Sample encoder layers with decreasing constraint
-            layers = []
-            for i in range(depth):
-                if i == 0:
-                    # First layer: full range
+                # Round down to nearest valid step
+                constrained_max = (constrained_max_raw // layer_step) * layer_step
+
+                # Ensure constrained_max is within valid range
+                constrained_max = min(constrained_max, layer_max)
+
+                # Check if we have a valid range that satisfies the constraint
+                if constrained_max < layer_min or constrained_max == 0:
+                    # Constraint cannot be satisfied with current minimum step
+                    # Use the raw constrained value (before rounding)
+                    if constrained_max_raw > 0:
+                        layer_size = constrained_max_raw
+                    else:
+                        # Shouldn't happen with valid gain, but use minimum step as fallback
+                        layer_size = layer_step
+                else:
                     layer_size = trial.suggest_int(
                         f"{param_path}_layer_{i}",
                         layer_min,
-                        layer_max,
+                        constrained_max,
                         step=layer_step
                     )
-                else:
-                    # Subsequent layers: constrained by previous layer * gain
-                    prev_layer = layers[i - 1]
-                    constrained_max_raw = int(prev_layer * gain)
 
-                    # Round down to nearest valid step
-                    constrained_max = (constrained_max_raw // layer_step) * layer_step
-
-                    # Ensure constrained_max is within valid range
-                    constrained_max = min(constrained_max, layer_max)
-
-                    # Check if we have a valid range that satisfies the constraint
-                    if constrained_max < layer_min or constrained_max == 0:
-                        # Constraint cannot be satisfied with current minimum step
-                        # Use the raw constrained value (before rounding)
-                        if constrained_max_raw > 0:
-                            layer_size = constrained_max_raw
-                        else:
-                            # Shouldn't happen with valid gain, but use minimum step as fallback
-                            layer_size = layer_step
-                    else:
-                        layer_size = trial.suggest_int(
-                            f"{param_path}_layer_{i}",
-                            layer_min,
-                            constrained_max,
-                            step=layer_step
-                        )
-
-                layers.append(layer_size)
-        else:
-            # For decoder, get the encoder layers and reverse them
-            encoder_param = param_def.get('mirror_from', 'model.encoder_units')
-            if encoder_param not in sampled_values:
-                raise ValueError(
-                    f"Decoder layer sequence requires '{encoder_param}' to be sampled first. "
-                    f"Ensure '{encoder_param}' appears before '{param_path}' in parameter space."
-                )
-
-            # Mirror encoder layers (reverse order for symmetry)
-            encoder_layers = sampled_values[encoder_param]
-            layers = list(reversed(encoder_layers))
+            layers.append(layer_size)
 
         return layers
 
