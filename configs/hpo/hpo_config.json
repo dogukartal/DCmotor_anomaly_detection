@@ -1,6 +1,6 @@
 {
   "experiment_id": "hpo",
-  "description": "Hyperparameter optimization configuration for LSTM autoencoder",
+  "description": "Hyperparameter optimization configuration for LSTM autoencoder with advanced layer optimization",
 
   "base_configs": {
     "simulation": "configs/simulation/default.json",
@@ -14,8 +14,18 @@
     "direction": "minimize",
     "parameters": {
       "model.encoder_units": {
-        "type": "categorical",
-        "choices": [[32], [64], [64, 32], [128, 64]]
+        "type": "layer_sequence",
+        "depth_choices": [2, 3],
+        "low": 16,
+        "high": 128,
+        "step": 16,
+        "gain": 0.5,
+        "comment": "Dynamic encoder layers: depth sampled from choices, each layer <= previous * gain"
+      },
+      "model.decoder_units": {
+        "type": "layer_sequence",
+        "mirror_from": "model.encoder_units",
+        "comment": "Decoder mirrors encoder in reverse order for symmetry"
       },
       "model.bottleneck.units": {
         "type": "int",
@@ -26,7 +36,8 @@
           "type": "max_from_last",
           "parameter": "model.encoder_units",
           "multiplier": 1.0
-        }
+        },
+        "comment": "Bottleneck units constrained to be <= last encoder layer"
       },
       "training.epochs": {
         "type": "int",
@@ -47,7 +58,20 @@
         "type": "int",
         "low": 3,
         "high": 15,
-        "step": 1
+        "step": 1,
+        "comment": "Learning rate reduction patience"
+      },
+      "training.early_stopping.patience": {
+        "type": "int",
+        "low": 10,
+        "high": 30,
+        "step": 5,
+        "constraint": {
+          "type": "min_ratio_of",
+          "parameter": "training.lr_scheduler.patience",
+          "ratio": 2.0
+        },
+        "comment": "Early stopping patience (must be >= lr_scheduler.patience * 2 to allow LR reductions)"
       },
       "physics_loss.weight": {
         "type": "uniform",
@@ -63,7 +87,8 @@
           "type": "max_ratio_of",
           "parameter": "training.epochs",
           "ratio": 0.5
-        }
+        },
+        "comment": "Physics loss start epoch constrained to <= 50% of total epochs"
       }
     }
   }
