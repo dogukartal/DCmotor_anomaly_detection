@@ -195,6 +195,9 @@ class HyperparameterOptimizer:
                 value = self._sample_layer_sequence(
                     trial, param_path, param_def, sampled_values
                 )
+                # Store complete layer sequence as user attribute for visibility
+                # This ensures all layers are visible even when some are constrained
+                trial.set_user_attr(param_path, value)
             # Handle parameter constraints
             elif 'constraint' in param_def:
                 value = self._sample_with_constraint(
@@ -606,6 +609,7 @@ class HyperparameterOptimizer:
             'best_trial': self.study.best_trial.number,
             'best_value': self.study.best_value,
             'best_params': self.study.best_params,
+            'best_layer_sequences': self.study.best_trial.user_attrs,
             'n_trials': len(self.study.trials),
             'metric': self.metric,
             'direction': self.direction
@@ -622,6 +626,7 @@ class HyperparameterOptimizer:
                 'trial_number': trial.number,
                 'value': trial.value,
                 'params': trial.params,
+                'layer_sequences': trial.user_attrs,
                 'state': trial.state.name
             }
             all_trials.append(trial_data)
