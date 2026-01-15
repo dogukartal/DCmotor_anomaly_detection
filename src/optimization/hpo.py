@@ -100,6 +100,11 @@ class HyperparameterOptimizer:
             import json
             json.dump(trial.params, f, indent=2)
 
+        # Save full trial config (includes layer sequences as lists)
+        trial_config_path = temp_exp_dir / 'trial_config.json'
+        with open(trial_config_path, 'w') as f:
+            json.dump(trial_config, f, indent=2)
+
         # Create minimal experiment paths (plots now needed for training graphs)
         class TempExpPaths:
             def __init__(self, root):
