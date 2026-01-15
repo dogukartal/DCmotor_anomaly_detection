@@ -65,6 +65,10 @@ def sample_layer_sequence(trial, param_path, depth_choices, layer_min, layer_max
 
         layers.append(layer_size)
 
+    # Store complete layer sequence as user attribute for visibility
+    # This ensures all layers are visible even when some are constrained
+    trial.set_user_attr(param_path, layers)
+
     return layers
 
 
